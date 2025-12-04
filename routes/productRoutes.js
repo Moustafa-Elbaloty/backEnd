@@ -1,50 +1,61 @@
-const express = require("express")
+const express = require("express");
 const router = express.Router();
-const multer = require('multer');
+const multer = require("multer");
 const path = require("path");
-const { addProduct, updateProduct, deleteProduct, getProducts, getAllProductsAdmin, getProductByID } = require("../controllers/productController")
-const { protect } = require("../middleware/authMiddleware");
-const {verifyAdmin} = require("../middleware/authMiddleware");
-
+const {
+  addProduct,
+  updateProduct,
+  deleteProduct,
+  getProducts,
+  getAllProductsAdmin,
+  getProductByID,
+} = require("../controllers/productController");
+const { protect, verifyAdmin } = require("../middleware/authMiddleware"); // جمعناهم هنا
 
 // ---------------- Multer setup ----------------
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '..', 'uploads')); // ../uploads
+    cb(null, path.join(__dirname, "..", "uploads")); // ../uploads
   },
   filename: function (req, file, cb) {
     const ext = path.extname(file.originalname);
-    const base = path.basename(file.originalname, ext).replace(/\s+/g, '-');
-    cb(null, Date.now() + '-' + base + ext);
-  }
+    const base = path.basename(file.originalname, ext).replace(/\s+/g, "-");
+    cb(null, Date.now() + "-" + base + ext);
+  },
 });
 
 const fileFilter = (req, file, cb) => {
-  // السماح بصيغ الصور فقط
-  if (file.mimetype.startsWith('image/')) {
+  if (file.mimetype.startsWith("image/")) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only images are allowed.'), false);
+    cb(new Error("Invalid file type. Only images are allowed."), false);
   }
 };
 
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 } // حد 5MB مثلاً
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 // -----------------------------------------------
 
+// إضافة منتج مع صورة: protect -> multer -> controller
+router.post("/addProduct", protect, upload.single("image"), addProduct);
 
+// تحديث المنتج — image اختياري (نضيف multer هنا)
+router.put("/:id", protect, upload.single("image"), updateProduct);
 
+// حذف المنتج
+router.delete("/:id", protect, deleteProduct);
 
-// إضافة منتج مع صورة: نفّذ حماية المستخدم أولاً ثم multer ثم controller
-router.post("/addProduct", protect, upload.single('image'), addProduct);
-router.put("/:id", protect, updateProduct)
-router.delete("/:id", protect, deleteProduct)
+// Admin only routes
 router.get("/adminGetProducts", protect, verifyAdmin, getAllProductsAdmin);
-router.get("/getProductByID", protect, verifyAdmin, getProductByID);
 
-router.get("/", getProducts)
+// Get single product by id (public or protected? هنا استخدمت protect+verifyAdmin سابقًا، لكن عادة GET by id يكون public)
+// لو عايزها عامة استبدل السطر التالي بـ: router.get("/:id", getProductByID);
+router.get("/:id", getProductByID);
+
+// قائمة المنتجات العامة
+router.get("/", getProducts);
 
 module.exports = router;
