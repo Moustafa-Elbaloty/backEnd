@@ -2,6 +2,8 @@ const express = require("express");
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const cors = require("cors");
+const http = require("http");
+const { Server } = require("socket.io");
 dotenv.config();
 const PORT = process.env.PORT || 5000;
 const app = express();
@@ -16,6 +18,25 @@ app.use(cors({
 
 connectDB();
 
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "http://localhost:4200", methods: ["GET", "POST"] },
+});
+
+// إضافة io في request object لكل الـ Controllers
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
+// استقبال الاتصالات
+io.on("connection", (socket) => {
+  console.log("A user connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+  });
+});
 
 const authRoutes = require("./routes/authRoutes");
 app.use("/api/auth", authRoutes);
@@ -38,8 +59,14 @@ app.use("/api/cart", cartRoutes);
 const orderRoutes = require("./routes/orderRoutes");
 app.use("/api/orders", orderRoutes);
 
+// مسارات الادمن
+const userRoutes = require("./routes/userRoutes");
+app.use("/api/users", userRoutes);
+
 // 💳 مسارات الدفع
 const paymentRoutes = require("./routes/paymentRoutes");
 app.use("/api/payment", paymentRoutes);
 
-app.listen(PORT, () => console.log(` Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`Server + Socket.io running on port ${PORT}`);
+});
