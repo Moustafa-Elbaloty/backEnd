@@ -8,7 +8,9 @@ const {
   getOrderById,
   cancelOrder,
   updateOrderStatus,
+  getAllOrders
 } = require("../controllers/orderController");
+const {verifyAdmin} = require("../middleware/authMiddleware");
 
 // ميدل وير الحماية الموحد
 const { protect } = require("../middleware/authMiddleware");
@@ -28,4 +30,7 @@ router.put("/:id/status", protect, updateOrderStatus);
 // GET /api/orders/:id
 router.get("/:id", protect, getOrderById);
 
+// Admin routes
+router.get("/orders", protect, verifyAdmin, getAllOrders);
+router.get("/order/:id", protect, verifyAdmin, getOrderById); 
 module.exports = router;
