@@ -2,12 +2,10 @@ const User = require("../models/userModel");
 const vendorModel = require("../models/vendorModel"); // إضافة مهمة
 const jwt = require("jsonwebtoken");
 
-// إنشاء التوكن
 const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "10d" });
 };
 
-// register
 const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;

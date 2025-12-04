@@ -35,14 +35,14 @@ const chatbot = async (req, res, next) => {
             }
         }
 
-        // لو مفيش أي حاجة مفهومة من الرسالة
+
         if (Object.keys(query).length === 0) {
             return res.json({
                 reply: "طلبك مش واضح يا صديقى وضح اكتر💡",
             });
         }
 
-        // ابحث عن أفضل 5 منتجات مناسبة
+
         const products = await Product.find(query).limit(5);
 
         if (!products.length) {
