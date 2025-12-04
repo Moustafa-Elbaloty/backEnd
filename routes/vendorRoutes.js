@@ -13,7 +13,6 @@ const {
   getVendorProducts,
   getVendorProfile,
   getVendorDashboard,
-  makeVendorByAdmin // ← دالة لتحويل أي user إلى vendor من الأدمن
 } = require("../controllers/vendorController");
 
 // =====================
@@ -26,8 +25,6 @@ router.get("/allVendors", protect, verifyAdmin, getAllVendors);
 router.delete("/delete/:id", protect, verifyAdmin, deleteAnyVendor); 
 // جلب منتجات أي بائع بواسطة الـ admin
 router.get("/getProducts/:id", protect, verifyAdmin, getAnyVendorProducts);
-// ترقية أي user إلى vendor بواسطة admin
-router.post("/makeVendor/:id", protect, verifyAdmin, makeVendorByAdmin);
 
 // =====================
 // Vendor / User Routes
