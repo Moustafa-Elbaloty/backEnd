@@ -1,12 +1,14 @@
 const express = require("express")
 const router = express.Router();
-const { addProduct, updateProduct, deleteProduct, getProducts } = require("../controllers/productController")
+const { addProduct, updateProduct, deleteProduct, getProducts, getAllProductsAdmin } = require("../controllers/productController")
 const { protect } = require("../middleware/authMiddleware");
+const {verifyAdmin} = require("../middleware/authMiddleware");
 
-// vendor only //
+
 router.post("/addProduct", protect, addProduct)
 router.put("/:id", protect, updateProduct)
 router.delete("/:id", protect, deleteProduct)
+router.get("/adminGetProducts", protect, verifyAdmin, getAllProductsAdmin);
 
 router.get("/", getProducts)
 
