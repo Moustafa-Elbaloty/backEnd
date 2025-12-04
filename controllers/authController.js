@@ -1,7 +1,6 @@
 const User = require("../models/userModel");
 const vendorModel = require("../models/vendorModel"); // إضافة مهمة
 const jwt = require("jsonwebtoken");
-const nodemailer = require("nodemailer");
 
 // إنشاء التوكن
 const generateToken = (id, role) => {
@@ -108,47 +107,5 @@ const verifyVendor = async (req, res) => {
   }
 };
 
-// register + send email to admin
-const registerUserWithEmail = async (req, res) => {
-  try {
-    const { name, email, password, role } = req.body;
 
-    if (!name || !email || !password) {
-      return res
-        .status(400)
-        .json({ success: false, message: "برجاء إدخال جميع البيانات" });
-    }
-
-    const user = await User.create({ name, email, password, role });
-
-    // nodemailer إعداد
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.ADMIN_EMAIL,
-        pass: process.env.ADMIN_EMAIL_PASSWORD,
-      },
-    });
-
-    const mailOptions = {
-      from: process.env.ADMIN_EMAIL,
-      to: process.env.ADMIN_EMAIL,
-      subject: "New User Registration",
-      text: `New user registered: ${name} (${email})`,
-    };
-
-    transporter.sendMail(mailOptions, (err, info) => {
-      if (err) console.error("Error sending email:", err);
-      else console.log("Email sent:", info.response);
-    });
-
-    res
-      .status(201)
-      .json({ success: true, message: "User registered successfully", data: user });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
-
-module.exports = { registerUser, loginUser, verifyVendor, registerUserWithEmail };
+module.exports = { registerUser, loginUser, verifyVendor };

@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const { registerUser, loginUser, registerUserWithEmail } = require("../controllers/authController");
+const { registerUser, loginUser } = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 
 // 🧍‍♂️ تسجيل مستخدم جديد
-router.post("/register", registerUser, registerUserWithEmail);
+router.post("/register", registerUser);
 
 // 🔑 تسجيل الدخول
 router.post("/login", loginUser);
