@@ -7,13 +7,20 @@ const {
   addToCart,
   removeFromCart,
   updateCartItem,
+  getAllCarts,
+  deleteCart,
 } = require("../controllers/cartController");
+
+const {verifyAdmin} = require("../middleware/authMiddleware");
 
 // استخدم ميدل وير الحماية الموحد
 const { protect } = require("../middleware/authMiddleware");
 
 // GET /api/cart/
 router.get("/", protect, getCart);
+
+router.get("/allCarts", protect, verifyAdmin, getAllCarts);        // {{baseURL}}/api/cart/allCarts
+router.delete("/delete/:userId", protect, verifyAdmin, deleteCart);// {{baseURL}}/api/cart/delete/:userId
 
 // POST /api/cart/add
 router.post("/add", protect, addToCart);
