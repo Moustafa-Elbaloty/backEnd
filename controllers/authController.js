@@ -11,18 +11,18 @@ const generateToken = (id, role) => {
 // register
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password } = req.body;
 
     if (!name || !email || !password) {
-      return res.status(400).json({ message: "يا نجم كمل باقى الحقول" });
+      return res.status(400).json({ message: "الرجاء ملأ باقى الحقول" });
     }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
-      return res.status(400).json({ message: "بريدك متسجل عندنا يا زعامه" });
+      return res.status(400).json({ message: "بريدك مسجل مسبقا" });
     }
 
-    const user = await User.create({ name, email, password, role });
+    const user = await User.create({ name, email, password });
 
     res.status(201).json({
       _id: user._id,
@@ -33,7 +33,7 @@ const registerUser = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
-      message: "معلش فى مشكله عندك ف النت ههه",
+      message: "حدث خطأ الرجاء اعاده المحاوله",
       error: error.message,
     });
   }
@@ -48,12 +48,12 @@ const loginUser = async (req, res) => {
     if (!user) {
       return res
         .status(400)
-        .json({ message: "روح سجل حساب يا صاحبى هستناك" });
+        .json({ message: "الرجاء التسجيل اولا " });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(400).json({ message: "كلمه السر غلط يا زعيم" });
+      return res.status(400).json({ message: "يوجد بيانات خطأ " });
     }
 
     res.json({
@@ -65,7 +65,7 @@ const loginUser = async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({
-      message: "ارجع يا نجم فى مشكله عيد من حبيبنا",
+      message: "حدث خطأ الرجاء اعاده المحاوله",
       error: error.message,
     });
   }
