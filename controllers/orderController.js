@@ -148,6 +148,11 @@ exports.cancelOrder = async (req, res) => {
     order.orderStatus = "cancelled";
     await order.save();
 
+    req.io.emit("order-cancelled", {
+      message: `${req.user.name} cancelled order ${order._id}`,
+      orderId: order._id,
+    });
+    
     res.json({
       message: "Order cancelled and stock restored",
       order,
