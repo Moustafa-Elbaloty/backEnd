@@ -99,53 +99,10 @@ const deleteUser = async (req, res) => {
   }
 };
 
-const makeVendorByAdmin = async (req, res) => {
-  try {
-    const { id } = req.params; // user ID اللي الأدمن عايز يرفعه Vendor
-
-    // هات اليوزر
-    const user = await userModel.findById(id);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
-    // اتأكد إن اليوزر مش Vendor أصلاً
-    const existingVendor = await vendorModel.findOne({ user: id });
-    if (existingVendor) {
-      return res.status(400).json({
-        success: false,
-        message: "This user is already a vendor",
-      });
-    }
-
-    // إنشاء Vendor جديد لهذا اليوزر
-    const vendor = await vendorModel.create({
-      user: id,
-      storeName: user.name + "'s Store", // اسم مؤقت وقابل للتعديل
-    });
-
-    // تغيير دور اليوزر
-    await userModel.findByIdAndUpdate(id, { role: "vendor" });
-
-    res.status(201).json({
-      success: true,
-      message: "User upgraded to vendor successfully",
-      data: vendor,
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Error converting user to vendor",
-      error: error.message,
-    });
-  }
-};
 
 
 
-module.exports = {getAllUsers, updateUser, deleteUser, getUser, makeVendorByAdmin};
+
+module.exports = {getAllUsers, updateUser, deleteUser, getUser};
+
 
