@@ -1,13 +1,20 @@
 const express = require("express");
-const route = express.Router();
+const router = express.Router();
 
-const {verifyAdmin} = require("../middleware/authMiddleware");
+const { authorizeRole } = require("../middleware/roleMiddleware");
+const { protect } = require("../middleware/authMiddleware");
+const { getAllUsers, updateUser, deleteUser, getUser } = require("../controllers/userController");
 
-const {getAllUsers, updateUser, deleteUser, getUser} = require('../controllers/userController')
+// 🔹 جلب كل المستخدمين (Admin only)
+router.get("/getAll", protect, authorizeRole("admin"), getAllUsers);
 
-route.get('/getAll',verifyAdmin, getAllUsers);
-route.put('/update/:id', verifyAdmin, updateUser);
-route.delete('/delete/:id',verifyAdmin,  deleteUser);
-route.get('/getOne/:id',verifyAdmin, getUser);
+// 🔹 جلب مستخدم واحد حسب الـ ID (Admin only)
+router.get("/getOne/:id", protect, authorizeRole("admin"), getUser);
 
-module.exports = route;
+// 🔹 تحديث مستخدم حسب الـ ID (Admin only)
+router.put("/update/:id", protect, authorizeRole("admin"), updateUser);
+
+// 🔹 حذف مستخدم حسب الـ ID (Admin only)
+router.delete("/delete/:id", protect, authorizeRole("admin"), deleteUser);
+
+module.exports = router;
