@@ -308,3 +308,25 @@ exports.cashPay = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+exports.getAllPayments = async (req, res) => {
+  try {
+    const payments = await Payment.find()
+      .populate({ path: "user", select: "name email role" })
+      .populate({ path: "order", select: "totalPrice paymentStatus orderStatus" })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      count: payments.length,
+      payments,
+    });
+  } catch (err) {
+    console.error("Error fetching payments:", err.message);
+    res.status(500).json({
+      success: false,
+      message: "Error fetching payments",
+      error: err.message,
+    });
+  }
+};
