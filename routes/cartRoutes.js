@@ -11,7 +11,7 @@ const {
   deleteCart,
 } = require("../controllers/cartController");
 
-const {verifyAdmin} = require("../middleware/authMiddleware");
+const { authorizeRole } = require("../middleware/roleMiddleware");
 
 // استخدم ميدل وير الحماية الموحد
 const { protect } = require("../middleware/authMiddleware");
@@ -19,8 +19,11 @@ const { protect } = require("../middleware/authMiddleware");
 // GET /api/cart/
 router.get("/", protect, getCart);
 
-router.get("/allCarts", protect, verifyAdmin, getAllCarts);        // {{baseURL}}/api/cart/allCarts
-router.delete("/delete/:userId", protect, verifyAdmin, deleteCart);// {{baseURL}}/api/cart/delete/:userId
+// GET /api/cart/allCarts
+router.get("/allCarts", protect, authorizeRole("admin"), getAllCarts);
+
+// DELETE /api/cart/delete/:userId
+router.delete("/delete/:userId", protect, authorizeRole("admin"), deleteCart); 
 
 // POST /api/cart/add
 router.post("/add", protect, addToCart);
