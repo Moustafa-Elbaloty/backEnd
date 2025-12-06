@@ -61,6 +61,7 @@ const userSchema = new mongoose.Schema(
     lastLogin: Date,
 
     addresses: [
+
       {
         street: String,
         city: String,
@@ -71,6 +72,7 @@ const userSchema = new mongoose.Schema(
           type: Boolean,
           default: false,
         },
+
       },
     ],
   },
@@ -96,29 +98,29 @@ userSchema.methods.comparePassword = async function (enteredPassword) {
 };
 
 userSchema.methods.createEmailVerificationToken = function () {
-    const verificationToken = crypto.randomBytes(32).toString("hex");
+  const verificationToken = crypto.randomBytes(32).toString("hex");
 
-    this.emailVerificationToken = crypto
-      .createHash("sha256")
-      .update(verificationToken)
-      .digest("hex");
+  this.emailVerificationToken = crypto
+    .createHash("sha256")
+    .update(verificationToken)
+    .digest("hex");
 
-    this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 ساعة
+  this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 ساعة
 
-    return verificationToken;
+  return verificationToken;
 };
 
 userSchema.methods.createPasswordResetToken = function () {
-    const resetToken = crypto.randomBytes(32).toString("hex");
+  const resetToken = crypto.randomBytes(32).toString("hex");
 
-    this.passwordResetToken = crypto
-      .createHash("sha256")
-      .update(resetToken)
-      .digest("hex");
+  this.passwordResetToken = crypto
+    .createHash("sha256")
+    .update(resetToken)
+    .digest("hex");
 
-    this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 دقايق
+  this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 دقايق
 
-    return resetToken;
+  return resetToken;
 };
 
 

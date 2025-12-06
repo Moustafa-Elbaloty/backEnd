@@ -57,7 +57,7 @@ const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res
         .status(400)
@@ -123,7 +123,118 @@ const verifyEmail = async (req, res) => {
   }
 };
 
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "من فضلك أدخل البريد الإلكتروني",
+      });
+    }
 
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "لا يوجد حساب بهذا البريد الإلكتروني",
+      });
+    }
+
+    const resetToken = user.createPasswordResetToken();
+    await user.save({ validateBeforeSave: false });
+
+    const resetURL = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "استعادة كلمة المرور",
+        text: `تلقينا طلباً لإعادة تعيين كلمة المرور. من فضلك اضغط على الرابط التالي: ${resetURL}`,
+        html: `
+          <h2>مرحباً ${user.name}</h2>
+          <p>من فضلك اضغط على الرابط التالي لإعادة تعيين كلمة المرور:</p>
+          <a href="${resetURL}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
+            إعادة تعيين كلمة المرور
+          </a>
+        `,
+      });
+
+      res.json({
+        success: true,
+        message: "تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني",
+      });
+    } catch (error) {
+      user.passwordResetToken = undefined;
+      user.passwordResetExpires = undefined;
+      await user.save({ validateBeforeSave: false });
+
+      return res.status(500).json({
+        success: false,
+        message: "حدث خطأ أثناء إرسال الإيميل",
+        error: error.message,
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "حدث خطأ أثناء معالجة الطلب",
+      error: error.message,
+    });
+  }
+};
+const resetPassword = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: "من فضلك أدخل كلمة المرور الجديدة",
+      });
+    }
+
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
+      });
+    }
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
+    const user = await User.findOne({
+      passwordResetToken: hashedToken,
+      passwordResetExpires: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "رابط استعادة كلمة المرور غير صالح أو منتهي الصلاحية",
+      });
+    }
+
+    user.password = password;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "حدث خطأ أثناء تغيير كلمة المرور",
+      error: error.message,
+    });
+  }
+};
 // Admin verifies vendor
 const verifyVendor = async (req, res) => {
   try {
@@ -162,4 +273,4 @@ const verifyVendor = async (req, res) => {
 };
 
 
-module.exports = { registerUser, loginUser, verifyVendor, verifyEmail };
+module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, };
