@@ -10,7 +10,6 @@ const {
   getMyPayments,
   getPaymentById,
   confirmStripePayment,
-  getAllPayments, 
 } = require("../controllers/paymentController");
 
 // ميدل وير الحماية الموحد
@@ -34,7 +33,5 @@ router.post("/paypal", protect, paypalPay);
 // POST /api/payment/cash
 router.post("/cash", protect, cashPay);
 
-//GET/api/payment/allpayments
-router.get("/allpayments", protect, authorizeRole("admin"), getAllPayments);
 
 module.exports = router;
