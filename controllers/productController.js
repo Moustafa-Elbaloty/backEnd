@@ -258,6 +258,8 @@ const getProducts = async (req, res) => {
 
 const getAllProductsAdmin = async (req, res) => {
   try {
+    if (req.user.role !== "admin")
+      return res.status(403).json({ message: "Access denied" });
     const products = await productModel.find().populate('vendor', 'name email');
     res.status(200).json({
       success: true,
