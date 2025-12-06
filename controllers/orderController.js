@@ -128,33 +128,42 @@ exports.getOrderById = async (req, res) => {
 // 🟢 Cancel order (only pending)
 exports.cancelOrder = async (req, res) => {
   try {
-    const order = await Order.findOne({
-      _id: req.params.id,
-      user: req.user.id,
-    });
+    let order;
 
-    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (req.user.role === "admin") {
+      order = await Order.findById(req.params.id);
+    } 
+    else {
+      order = await Order.findOne({
+        _id: req.params.id,
+        user: req.user.id,
+      });
+    }
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
 
     if (order.orderStatus !== "pending") {
-      return res
-        .status(400)
-        .json({ message: "Only pending orders can be cancelled" });
+      return res.status(400).json({
+        message: "Only pending orders can be cancelled",
+      });
     }
 
     order.orderStatus = "cancelled";
     await order.save();
- 
+
     req.io.emit("order-cancelled", {
       message: `${req.user.name} cancelled order ${order._id}`,
       orderId: order._id,
     });
 
     res.json({ message: "Order cancelled", order });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
-
 // 🟢 Vendor/Admin update status
 exports.updateOrderStatus = async (req, res) => {
   try {
@@ -193,29 +202,42 @@ exports.updateOrderStatus = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 exports.getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find()
+    if (req.user.role !== "admin")
+      return res.status(403).json({ message: "Access denied" });
+
+    const { status, paymentStatus, vendorId, userId } = req.query;
+    const filter = {};
+
+    if (status) filter.orderStatus = status;
+    if (paymentStatus) filter.paymentStatus = paymentStatus;
+    if (vendorId) filter.vendor = vendorId;
+    if (userId) filter.user = userId;
+
+    const orders = await Order.find(filter)
       .populate("user", "name email")
-      .populate("product", "name price");
+      .populate("vendor", "name email")
+      .populate("items.product", "name price image");
 
     if (orders.length === 0) {
       return res.status(404).json({
         success: false,
         message: "No orders found",
-        data: null
+        data: null,
       });
     }
 
-    const data = orders.map(order => ({
+    const data = orders.map((order) => ({
       ...order._doc,
-      sellerAmount: order.amount - order.adminCommission
+      sellerAmount: order.totalPrice - order.adminCommission,
     }));
 
     res.status(200).json({
       success: true,
       message: "Orders fetched successfully",
-      data
+      data,
     });
 
   } catch (err) {
@@ -227,15 +249,47 @@ exports.getAllOrders = async (req, res) => {
 exports.getOrderById = async (req, res) => {
   try {
     const orderId = req.params.id;
-    const order = await Order.findById(orderId);
-    if (!order)
+
+    const order = await Order.findById(orderId)
+      .populate("user", "name email role")
+      .populate("vendor", "name email")
+      .populate("items.product", "name price image");
+
+    if (!order) {
       return res.status(404).json({ message: "Order not found" });
+    }
 
-    const user = await User.findById(order.user).select("name email");
-    const product = await Product.findById(order.product).select("name price");
+    // منع مستخدم يشوف طلبات غيره إلا لو Admin
+    if (req.user.role !== "admin" && order.user._id.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied: you can only view your own orders",
+      });
+    }
 
-    res.status(200).json({order});
+    res.status(200).json({
+      success: true,
+      order: {
+        id: order._id,
+        items: order.items.map(item => ({
+          product: item.product,
+          quantity: item.quantity,
+          price: item.price,
+          totalItemPrice: item.totalItemPrice,
+        })),
+        totalPrice: order.totalPrice,             
+        paymentMethod: order.paymentMethod,
+        orderStatus: order.orderStatus,
+        paymentStatus: order.paymentStatus,
+        adminCommission: order.adminCommission,
+        sellerAmount: order.sellerAmount,
+        createdAt: order.createdAt,
+        user: order.user,
+        vendor: order.vendor,
+      },
+    });
+
   } catch (err) {
-    res.status(500).json({ message: "Server error while fetching order" });
+    res.status(500).json({ message: err.message });
   }
 };
