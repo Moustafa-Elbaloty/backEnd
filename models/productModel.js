@@ -45,15 +45,24 @@ const productSchema = new mongoose.Schema({
         required: true,
         enum: ["Apple", "Samsung", "Xiaomi", "Oppo", "Huawei", "Other"],
     }
-}, { timestamps: true });
+}, {
+    timestamps: true,
+    toJSON: { virtuals: true },   // important: include virtuals in JSON
+    toObject: { virtuals: true }  // important: include virtuals in toObject()
+});
 
 // Prevent same vendor from adding duplicate products
 productSchema.index(
-    { vendor: 1, name: 1, description: 1 },
+    { vendor: 1, name: 1, description: 1, brand: 1 },
     { unique: true }
 );
 
 // Text search index
 productSchema.index({ name: "text", description: "text", category: "text" });
+
+// Virtual field: outOfStock (not stored in DB)
+productSchema.virtual("outOfStock").get(function () {
+    return this.stock === 0;
+});
 
 module.exports = mongoose.model("Product", productSchema);
