@@ -62,7 +62,9 @@ app.use("/api/cart", cartRoutes);
 const orderRoutes = require("./routes/orderRoutes");
 app.use("/api/orders", orderRoutes);
 
-// مسارات الادمن
+const adminRoutes = require("./routes/adminRoutes.js");
+app.use("/api/admin", adminRoutes);
+
 const userRoutes = require("./routes/userRoutes");
 app.use("/api/users", userRoutes);
 
