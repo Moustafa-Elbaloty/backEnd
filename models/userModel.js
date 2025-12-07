@@ -59,7 +59,6 @@ const userSchema = new mongoose.Schema(
     },
     lockUntil: Date,
     lastLogin: Date,
-
     addresses: [
 
       {
@@ -105,7 +104,7 @@ userSchema.methods.createEmailVerificationToken = function () {
     .update(verificationToken)
     .digest("hex");
 
-  this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000; // 24 ساعة
+  this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
 
   return verificationToken;
 };

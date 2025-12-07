@@ -28,7 +28,6 @@ const registerUser = async (req, res) => {
     const verificationToken = user.createEmailVerificationToken();
     await user.save({ validateBeforeSave: false });
 
-    //  تكوين لينك التفعيل
     const verificationURL = `${req.protocol}://${req.get(
       "host"
     )}/api/auth/verify-email/${verificationToken}`;
@@ -38,7 +37,7 @@ const registerUser = async (req, res) => {
       subject: "تفعيل حسابك",
       text: `من فضلك فعّل حسابك عبر الرابط التالي: ${verificationURL}`,
       html: `<p>من فضلك فعّل حسابك عبر الضغط على الرابط التالي:</p>
-             <a href="${verificationURL}">${verificationURL}</a>`,
+             <a href="${verificationURL}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">هنا</a>`,
     });
 
     res.status(201).json({
@@ -147,7 +146,10 @@ const forgotPassword = async (req, res) => {
     const resetToken = user.createPasswordResetToken();
     await user.save({ validateBeforeSave: false });
 
-    const resetURL = `${process.env.CLIENT_URL}/reset-password/${resetToken}`;
+
+    const resetURL = `${req.protocol}://${req.get(
+      "host"
+    )}/api/auth/reset-password/${resetToken}`;
     try {
       await sendEmail({
         to: user.email,
@@ -237,6 +239,74 @@ const resetPassword = async (req, res) => {
     });
   }
 };
+
+const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmNewPassword } = req.body;
+
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "من فضلك أدخل جميع الحقول المطلوبة",
+      });
+    }
+
+
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "كلمة المرور الجديدة غير متطابقة",
+      });
+    }
+
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
+      });
+    }
+
+    const user = await User.findById(req.user._id).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "المستخدم غير موجود",
+      });
+    }
+
+    const isMatch = await user.comparePassword(currentPassword);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "كلمة المرور القديمة غير صحيحة",
+      });
+    }
+
+    user.password = newPassword;
+    await user.save();
+
+
+    const token = generateToken(user._id, user.role);
+
+    res.json({
+      success: true,
+      message: "تم تغيير كلمة المرور بنجاح",
+      token,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "حدث خطأ أثناء تغيير كلمة المرور",
+      error: error.message,
+    });
+  }
+};
+
+
+
+
 // Admin verifies vendor
 const verifyVendor = async (req, res) => {
   try {
@@ -275,4 +345,4 @@ const verifyVendor = async (req, res) => {
 };
 
 
-module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, };
+module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, changePassword };
