@@ -1,29 +1,31 @@
 const User = require("../models/userModel");
-const vendorModel = require("../models/vendorModel"); // إضافة مهمة
+const vendorModel = require("../models/vendorModel");
 const jwt = require("jsonwebtoken");
 const sendEmail = require("../utils/sendEmail");
 const crypto = require("crypto");
-
+const i18n = require("i18n");
 
 const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "10d" });
 };
 
+// ============================
+//       REGISTER USER
+// ============================
 const registerUser = async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
 
     if (!name || !email || !password || !phone) {
-      return res.status(400).json({ message: "الرجاء ملأ باقى الحقول" });
+      return res.status(400).json({ message: req.t("auth.fillFields") });
     }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
-      return res.status(400).json({ message: "بريدك مسجل مسبقا" });
+      return res.status(400).json({ message: req.t("auth.emailRegistered") });
     }
 
     const user = await User.create({ name, email, password, phone });
-
 
     const verificationToken = user.createEmailVerificationToken();
     await user.save({ validateBeforeSave: false });
@@ -34,46 +36,47 @@ const registerUser = async (req, res) => {
 
     await sendEmail({
       to: user.email,
-      subject: "تفعيل حسابك",
-      text: `من فضلك فعّل حسابك عبر الرابط التالي: ${verificationURL}`,
-      html: `<p>من فضلك فعّل حسابك عبر الضغط على الرابط التالي:</p>
-             <a href="${verificationURL}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">هنا</a>`,
+      subject: req.t("auth.verifyEmailSubject"),
+      text: `${req.t("auth.verifyEmailText")} ${verificationURL}`,
+      html: `
+        <p>${req.t("auth.verifyEmailText")}</p>
+        <a href="${verificationURL}" style="padding: 10px 20px; background-color: #007bff; color: #fff; text-decoration: none;">
+          ${req.t("auth.clickHere")}
+        </a>
+      `,
     });
 
     res.status(201).json({
-      message: "تم إنشاء الحساب، من فضلك افحص بريدك لتفعيل الحساب",
+      message: req.t("auth.registerGreeting"),
     });
+
   } catch (error) {
     res.status(500).json({
-      message: "حدث خطأ الرجاء اعاده المحاوله",
+      message: req.t("auth.serverError"),
       error: error.message,
     });
   }
 };
 
-
-
-// login
+// ============================
+//           LOGIN
+// ============================
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email }).select("+password");
     if (!user) {
-      return res
-        .status(400)
-        .json({ message: "الرجاء التسجيل اولا " });
+      return res.status(400).json({ message: req.t("auth.emailNotFound") });
     }
 
     if (!user.isEmailVerified) {
-      return res.status(400).json({
-        message: "يرجى تفعيل حسابك عبر البريد الإلكتروني قبل تسجيل الدخول",
-      });
+      return res.status(400).json({ message: req.t("auth.verifyEmailFirst") });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(400).json({ message: "يوجد بيانات خطأ " });
+      return res.status(400).json({ message: req.t("auth.wrongPassword") });
     }
 
     res.json({
@@ -82,22 +85,25 @@ const loginUser = async (req, res) => {
       email: user.email,
       role: user.role,
       token: generateToken(user._id, user.role),
+      message: req.t("auth.loginSuccess")
     });
+
   } catch (error) {
     res.status(500).json({
-      message: "حدث خطأ الرجاء اعاده المحاوله",
+      message: req.t("auth.serverError"),
       error: error.message,
     });
   }
 };
+
+// ============================
+//        VERIFY EMAIL
+// ============================
 const verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
 
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(token)
-      .digest("hex");
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
 
     const user = await User.findOne({
       emailVerificationToken: hashedToken,
@@ -105,110 +111,82 @@ const verifyEmail = async (req, res) => {
     });
 
     if (!user) {
-      return res
-        .status(400)
-        .json({ message: "رابط التفعيل غير صالح أو منتهي الصلاحية" });
+      return res.status(400).json({ message: req.t("auth.invalidOrExpiredToken") });
     }
 
     user.isEmailVerified = true;
     user.emailVerificationToken = undefined;
     user.emailVerificationExpires = undefined;
+
     await user.save();
 
-    res.json({ message: "تم تفعيل الإيميل بنجاح، يمكنك تسجيل الدخول الآن" });
+    res.json({ message: req.t("auth.emailVerifiedSuccess") });
+
   } catch (error) {
     res.status(500).json({
-      message: "حدث خطأ أثناء تفعيل الإيميل",
+      message: req.t("auth.verifyEmailError"),
       error: error.message,
     });
   }
 };
 
+// ============================
+//       FORGOT PASSWORD
+// ============================
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
+
     if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "من فضلك أدخل البريد الإلكتروني",
-      });
+      return res.status(400).json({ message: req.t("auth.emailRequired") });
     }
 
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "لا يوجد حساب بهذا البريد الإلكتروني",
-      });
+      return res.status(404).json({ message: req.t("auth.emailNotFound") });
     }
 
     const resetToken = user.createPasswordResetToken();
     await user.save({ validateBeforeSave: false });
 
-
     const resetURL = `${req.protocol}://${req.get(
       "host"
     )}/api/auth/reset-password/${resetToken}`;
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: "استعادة كلمة المرور",
-        text: `تلقينا طلباً لإعادة تعيين كلمة المرور. من فضلك اضغط على الرابط التالي: ${resetURL}`,
-        html: `
-          <h2>مرحباً ${user.name}</h2>
-          <p>من فضلك اضغط على الرابط التالي لإعادة تعيين كلمة المرور:</p>
-          <a href="${resetURL}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
-            إعادة تعيين كلمة المرور
-          </a>
-        `,
-      });
 
-      res.json({
-        success: true,
-        message: "تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني",
-      });
-    } catch (error) {
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save({ validateBeforeSave: false });
+    await sendEmail({
+      to: user.email,
+      subject: req.t("auth.resetPasswordSubject"),
+      text: `${req.t("auth.resetPasswordText")} ${resetURL}`,
+    });
 
-      return res.status(500).json({
-        success: false,
-        message: "حدث خطأ أثناء إرسال الإيميل",
-        error: error.message,
-      });
-    }
+    res.json({ message: req.t("auth.resetEmailSent") });
+
   } catch (error) {
     res.status(500).json({
-      success: false,
-      message: "حدث خطأ أثناء معالجة الطلب",
+      message: req.t("auth.serverError"),
       error: error.message,
     });
   }
 };
+
+// ============================
+//       RESET PASSWORD
+// ============================
 const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
     const { password } = req.body;
+
     if (!password) {
-      return res.status(400).json({
-        success: false,
-        message: "من فضلك أدخل كلمة المرور الجديدة",
-      });
+      return res.status(400).json({ message: req.t("auth.passwordRequired") });
     }
 
     if (password.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
-      });
+      return res.status(400).json({ message: req.t("auth.passwordMinLength") });
     }
 
-    const hashedToken = crypto
-      .createHash("sha256")
-      .update(token)
-      .digest("hex");
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
 
     const user = await User.findOne({
       passwordResetToken: hashedToken,
@@ -216,133 +194,110 @@ const resetPassword = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: "رابط استعادة كلمة المرور غير صالح أو منتهي الصلاحية",
-      });
+      return res.status(400).json({ message: req.t("auth.invalidOrExpiredToken") });
     }
 
     user.password = password;
     user.passwordResetToken = undefined;
     user.passwordResetExpires = undefined;
+
     await user.save();
 
-    res.json({
-      success: true,
-      message: "تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول",
-    });
+    res.json({ message: req.t("auth.passwordResetSuccess") });
+
   } catch (error) {
     res.status(500).json({
-      success: false,
-      message: "حدث خطأ أثناء تغيير كلمة المرور",
+      message: req.t("auth.serverError"),
       error: error.message,
     });
   }
 };
 
+// ============================
+//       CHANGE PASSWORD
+// ============================
 const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword, confirmNewPassword } = req.body;
 
     if (!currentPassword || !newPassword || !confirmNewPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "من فضلك أدخل جميع الحقول المطلوبة",
-      });
+      return res.status(400).json({ message: req.t("auth.fillFields") });
     }
-
 
     if (newPassword !== confirmNewPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "كلمة المرور الجديدة غير متطابقة",
-      });
+      return res.status(400).json({ message: req.t("auth.passwordNotMatch") });
     }
 
-
     if (newPassword.length < 8) {
-      return res.status(400).json({
-        success: false,
-        message: "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
-      });
+      return res.status(400).json({ message: req.t("auth.passwordMinLength") });
     }
 
     const user = await User.findById(req.user._id).select("+password");
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "المستخدم غير موجود",
-      });
+      return res.status(404).json({ message: req.t("auth.userNotFound") });
     }
 
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch) {
-      return res.status(401).json({
-        success: false,
-        message: "كلمة المرور القديمة غير صحيحة",
-      });
+      return res.status(401).json({ message: req.t("auth.wrongPassword") });
     }
 
     user.password = newPassword;
     await user.save();
 
-
-    const token = generateToken(user._id, user.role);
-
     res.json({
-      success: true,
-      message: "تم تغيير كلمة المرور بنجاح",
-      token,
+      message: req.t("auth.passwordChanged"),
+      token: generateToken(user._id, user.role),
     });
+
   } catch (error) {
     res.status(500).json({
-      success: false,
-      message: "حدث خطأ أثناء تغيير كلمة المرور",
+      message: req.t("auth.serverError"),
       error: error.message,
     });
   }
 };
 
-
-
-
-// Admin verifies vendor
+// ============================
+//       VERIFY VENDOR (ADMIN)
+// ============================
 const verifyVendor = async (req, res) => {
   try {
     const { vendorId } = req.params;
 
     if (req.user.role !== "admin") {
-      return res
-        .status(403)
-        .json({ success: false, message: "Only admin can verify vendors" });
+      return res.status(403).json({ message: req.t("auth.adminOnly") });
     }
 
     const vendor = await vendorModel.findById(vendorId);
 
     if (!vendor) {
-      return res.status(404).json({
-        success: false,
-        message: "Vendor not found",
-      });
+      return res.status(404).json({ message: req.t("auth.vendorNotFound") });
     }
 
     vendor.verified = true;
     await vendor.save();
 
-    res.status(200).json({
-      success: true,
-      message: "Vendor verified successfully",
+    res.json({
+      message: req.t("auth.vendorVerified"),
       data: vendor,
     });
+
   } catch (error) {
     res.status(500).json({
-      success: false,
-      message: "Error verifying vendor",
+      message: req.t("auth.serverError"),
       error: error.message,
     });
   }
 };
 
-
-module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, changePassword };
+module.exports = {
+  registerUser,
+  loginUser,
+  verifyVendor,
+  verifyEmail,
+  forgotPassword,
+  resetPassword,
+  changePassword
+};
