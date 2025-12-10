@@ -5,9 +5,8 @@ const chatbot = async (req, res, next) => {
         let { message } = req.body;
 
         if (!message) {
-            return res.status(400).json({ reply: "Please send your message 👋" });
+            return res.status(400).json({ reply: "chatbot.sendMessageRequired" });
         }
-
 
         let query = {};
 
@@ -31,30 +30,29 @@ const chatbot = async (req, res, next) => {
             } else if (message.includes("اكبر") || message.includes("فوق")) {
                 query.price = { $gte: price };
             } else {
-                query.price = { $lte: price }; // default behavior
+                query.price = { $lte: price };
             }
         }
 
-
         if (Object.keys(query).length === 0) {
             return res.json({
-                reply: "طلبك مش واضح يا صديقى وضح اكتر💡",
+                reply: "chatbot.unclearRequest",
             });
         }
-
 
         const products = await Product.find(query).limit(5);
 
         if (!products.length) {
             return res.json({
-                reply: "مش لاقى جاخ من ال انت طلبته جرب تطلب حاجه تانيه",
+                reply: "chatbot.noResultsFound",
             });
         }
 
         res.json({
-            reply: ` ${products.length} جبتهولك يا صديقى🎯`,
+            reply: "chatbot.productsFound",
             products,
         });
+
     } catch (error) {
         next(error);
     }
