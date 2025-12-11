@@ -3,7 +3,7 @@ const router = express.Router();
 const {
   registerUser,
   loginUser,
-  verifyEmail, resetPassword, forgotPassword, changePassword
+  verifyEmail, resetPassword, forgotPassword, changePassword,logout
 } = require("../controllers/authController");
 const { protect } = require("../middleware/authMiddleware");
 
@@ -18,7 +18,7 @@ router.post("/forgot-password", forgotPassword);
 router.put("/reset-password/:token", resetPassword);
 
 router.put("/change-password", protect, changePassword);
-
+router.post("/logout", protect, logout);
 router.get("/profile", protect, (req, res) => {
   res.json({
     message: `مرحبًا يا ${req.user.name} `,
@@ -26,5 +26,6 @@ router.get("/profile", protect, (req, res) => {
     role: req.user.role,
   });
 });
+
 
 module.exports = router;

@@ -1,6 +1,3 @@
-const jwt = require("jsonwebtoken");
-const User = require("../models/userModel");
-
 const protect = async (req, res, next) => {
   let token;
 
@@ -13,22 +10,37 @@ const protect = async (req, res, next) => {
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-
       req.user = await User.findById(decoded.id).select("-password");
 
+      // 👇 أضف الشيك على الـ Blacklist هنا
+      const isBlacklisted = req.user.blacklistedTokens.some(
+        (item) => item.token === token
+      );
+
+      if (isBlacklisted) {
+        return res.status(401).json({
+          success: false,
+          message: "❌ تم تسجيل الخروج، من فضلك سجل دخول مرة أخرى",
+        });
+      }
 
       next();
     } catch (error) {
       console.error(error);
-      res.status(401).json({ message: "❌ التوكن  منتهي الصلاحية" });
+      return res.status(401).json({
+        success: false,
+        message: "❌ التوكن منتهي الصلاحية",
+      });
     }
   }
 
   if (!token) {
-    res.status(401).json({ message: "🔒 غير مصرح لك بالدخول، مفيش توكن" });
+    return res.status(401).json({
+      success: false,
+      message: "🔒 غير مصرح لك بالدخول، مفيش توكن",
+    });
   }
 };
-
 
 
 module.exports = { protect };

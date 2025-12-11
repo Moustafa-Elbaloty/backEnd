@@ -304,7 +304,57 @@ const changePassword = async (req, res) => {
   }
 };
 
+const logout = async (req, res) => {
+  try {
+    // جلب الـ Token من الـ Header
+    let token;
+    if (
+      req.headers.authorization &&
+      req.headers.authorization.startsWith("Bearer")
+    ) {
+      token = req.headers.authorization.split(" ")[1];
+    }
 
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: "لا يوجد توكن لتسجيل الخروج",
+      });
+    }
+
+    // فك تشفير الـ Token لمعرفة وقت انتهائه
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // جلب User
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "المستخدم غير موجود",
+      });
+    }
+
+    // إضافة الـ Token للـ Blacklist
+    user.blacklistedTokens.push({
+      token: token,
+      expiresAt: new Date(decoded.exp * 1000), // تحويل من Unix timestamp
+    });
+
+    await user.save({ validateBeforeSave: false });
+
+    res.json({
+      success: true,
+      message: "تم تسجيل الخروج بنجاح",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "حدث خطأ أثناء تسجيل الخروج",
+      error: error.message,
+    });
+  }
+};
 
 
 // Admin verifies vendor
@@ -345,4 +395,4 @@ const verifyVendor = async (req, res) => {
 };
 
 
-module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, changePassword };
+module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, changePassword ,logout};

@@ -59,6 +59,14 @@ const userSchema = new mongoose.Schema(
     },
     lockUntil: Date,
     lastLogin: Date,
+
+lastLogin: Date,
+blacklistedTokens: [
+  {
+    token: String,
+    expiresAt: Date,
+  },
+],
     addresses: [
 
       {
