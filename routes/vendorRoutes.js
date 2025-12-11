@@ -12,7 +12,7 @@ const {
   getVendorProfile,
   getVendorDashboard,
   getAllVendors,
-  deleteAnyVendor,
+  
 } = require("../controllers/vendorController");
 
 // =====================
@@ -60,18 +60,6 @@ router.get("/products", protect, getVendorProducts);
 // Dashboard خاص بالبائع فقط
 router.get("/dashboard", protect, authorizeRole("vendor"), getVendorDashboard);
 
-// =====================
-// Admin Routes for Vendors
-// =====================
 
-// جلب كل البائعين (admin)
-router.get("/admin", protect, authorizeRole("admin"), getAllVendors);
-
-// حذف بائع بواسطة الأدمن (admin)
-router.delete("/admin/:id", protect, authorizeRole("admin"), deleteAnyVendor);
-
-// جلب منتجات بائع محدد بواسطة الأدمن (admin)
-// ملاحظة: الدالة getVendorProducts تقبل id في params إذا كان الـ role = admin
-router.get("/admin/:id/products", protect, authorizeRole("admin"), getVendorProducts);
 
 module.exports = router;
