@@ -3,7 +3,7 @@ const router = express.Router();
 
 const { authorizeRole } = require("../middleware/roleMiddleware");
 const { protect } = require("../middleware/authMiddleware");
-const { updateUser, deleteUser } = require("../controllers/userController");
+const { updateUser, deleteUser , getUserDashboard} = require("../controllers/userController");
 
 // 🔹 تحديث مستخدم
 router.put("/update", protect, authorizeRole("user"), updateUser);
@@ -15,5 +15,6 @@ router.get("/dashboard", protect, authorizeRole("user"), getUserDashboard)
 router.delete("/delete/", protect, authorizeRole("user"), deleteUser);
 
 module.exports = router;
+
 
 
