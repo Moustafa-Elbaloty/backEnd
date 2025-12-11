@@ -109,55 +109,6 @@ const updateVendor = async (req, res) => {
   }
 };
 
-// helper: حذف ملفات المنتج (مثال)
-// تعديل هذا الجزء حسب طريقة تخزين الصور/الملفات عندك (S3, Cloudinary, local, ...).
-const deleteProductFiles = async (product) => {
-  // مثال: لو المنتج عنده حقل images = [{ url, key }] حيث key هو مفتاح S3 أو اسم الملف
-  if (!product) return;
-  try {
-    if (product.images && Array.isArray(product.images)) {
-      for (const img of product.images) {
-        // مثال حذف ملف محلي
-        // if (img.path) {
-        //   const filePath = path.join(__dirname, "..", "uploads", img.path);
-        //   if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-        // }
-
-        // مثال حذف من S3 (uncomment بعد إعداد s3 client)
-        // if (img.key) {
-        //   await s3.deleteObject({ Bucket: "YOUR_BUCKET", Key: img.key }).promise();
-        // }
-
-        // أو ضع هنا أي منطق آخر لحذف الملفات
-      }
-    }
-
-    // إذا تستخدم تخزين واحد للـ product مثل product.image (string) عدّل المنطق أعلاه
-  } catch (err) {
-    // لا تفشل الحذف الكلي لو فشل حذف ملف واحد — يمكنك تسجيل الخطأ
-    console.error("Error deleting product files:", err.message);
-  }
-};
-
-//  Delete vendor account (vendor deletes own account)
-const deleteVendor = async (req, res) => {
-  // نستخدم transaction لو كانت بيئة MongoDB تدعمها (replica set)
-  const session = await mongoose.startSession();
-  try {
-    // يمكنك إلغاء الـ transaction إذا كنت لا تستخدم replica set
-    session.startTransaction();
-
-    const vendor = await vendorModel
-      .findOne({ user: req.user.id })
-      .session(session);
-
-    if (!vendor) {
-      await session.abortTransaction();
-      session.endSession();
-      return res
-        .status(404)
-        .json({ success: false, message: "Vendor not found" });
-    }
 
     // جلب المنتجات المرتبطة بالـ vendor (للتعامل مع الملفات قبل الحذف)
     const products = await productModel
@@ -315,59 +266,74 @@ const getAllVendors = async (req, res) => {
   }
 };
 
-const deleteAnyVendor = async (req, res) => {
-  const session = await mongoose.startSession();
+const deleteVendor = async (req, res) => {
+  let session;
   try {
-    if (req.user.role !== "admin") {
+    // فقط Admin أو Vendor نفسه يسمح له
+    if (req.user.role !== "admin" && req.user.role !== "vendor") {
       return res.status(403).json({ message: "Access denied" });
     }
-    session.startTransaction();
 
-    const { id } = req.params;
-    const vendor = await vendorModel.findById(id).session(session);
+    const { id } = req.params; // لو admin يحذف أي بائع، لو vendor نفسه: req.user.id
+    const vendorId = req.user.role === "vendor" ? req.user.id : id;
+
+    // تحقق من دعم Transaction
+    const isReplicaSet = mongoose.connection.client.topology.s.options.replicaSet;
+    if (isReplicaSet) session = await mongoose.startSession();
+
+    if (session) session.startTransaction();
+
+    // جلب Vendor
+    const vendor = await vendorModel.findById(vendorId).session(session);
     if (!vendor) {
-      await session.abortTransaction();
-      session.endSession();
-      return res
-        .status(404)
-        .json({ success: false, message: "Vendor not found" });
+      if (session) {
+        await session.abortTransaction();
+        session.endSession();
+      }
+      return res.status(404).json({ success: false, message: "Vendor not found" });
     }
 
-    // جلب منتجات البائع لحذف ملفاتها ثم السجلات
-    const products = await productModel.find({ vendor: vendor._id }).session(
-      session
-    );
+    // جلب المنتجات المرتبطة بالـ Vendor
+    const products = await productModel.find({ vendor: vendor._id }).session(session);
 
-    for (const p of products) {
-      await deleteProductFiles(p);
-    }
+    // حذف ملفات المنتجات بالتوازي
+    await Promise.all(products.map(p => deleteProductFiles(p)));
 
+    // حذف المنتجات من DB
     await productModel.deleteMany({ vendor: vendor._id }).session(session);
 
-    await vendorModel.deleteOne({ _id: id }).session(session);
+    // حذف Vendor نفسه
+    await vendorModel.deleteOne({ _id: vendor._id }).session(session);
 
+    // تحويل الدور إلى user
     await userModel.findByIdAndUpdate(vendor.user, { role: "user" }, { session });
 
-    await session.commitTransaction();
-    session.endSession();
+    if (session) {
+      await session.commitTransaction();
+      session.endSession();
+    }
 
-    res
-      .status(200)
-      .json({ success: true, message: "Vendor deleted by admin" });
+    res.status(200).json({
+      success: true,
+      message: "Vendor and their products deleted successfully",
+      deletedProducts: products.length
+    });
   } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
+    if (session) {
+      await session.abortTransaction();
+      session.endSession();
+    }
     res.status(500).json({
       success: false,
       message: "Error deleting vendor",
-      error: error.message,
+      error: error.message
     });
   }
 };
 
 module.exports = {
   getAllVendors,
-  deleteAnyVendor,
+  
   createVendor,
   getVendorProfile,
   updateVendor,
