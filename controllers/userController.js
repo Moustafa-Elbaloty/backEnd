@@ -19,17 +19,37 @@ const getAllUsers = async (req, res) => {
 // 🔵 Get single user
 const getUser = async (req, res) => {
   try {
-    if (req.user.role !== "admin")
-      return res.status(403).json({ message: "Access denied" });
-    if (!req.params.id) return res.status(404).send("Enter UserId");
-    const user = await User.findById(req.params.id).select("-password");
+    // Admin only
+    if (req.user.role !== "admin") {
+      return res.status(403).json({ message: "Access denied. Admins only." });
+    }
+
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    const user = await User.findById(id).select("-password");
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.status(200).json(user);
+
+    const orders = await Order.find({ user: id })
+      .populate("items.product")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      user,
+      totalOrders: orders.length,
+      orders,
+    });
   } catch (err) {
     console.error("Error fetching user:", err);
-    res.status(500).json({ message: "Server error while fetching user" });
+    res.status(500).json({
+      message: "Server error while fetching user",
+      error: err.message,
+    });
   }
 };
 
@@ -249,5 +269,6 @@ const getUserDashboard = async (req, res) => {
   }
 };
 module.exports = { getAllUsers, updateUser, deleteUser, getUser, getUserDashboard };
+
 
 
