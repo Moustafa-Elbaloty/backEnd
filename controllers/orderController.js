@@ -169,7 +169,6 @@ exports.updateOrderStatus = async (req, res) => {
   try {
     const { status } = req.body;
 
-    // التحقق من الحالة المسموحة
     const allowedStatuses = [
       "pending",
       "processing",
@@ -177,32 +176,58 @@ exports.updateOrderStatus = async (req, res) => {
       "delivered",
       "cancelled",
     ];
+
     if (!status || !allowedStatuses.includes(status)) {
       return res.status(400).json({
-        message: `Invalid status. Must be one of: ${allowedStatuses.join(
-          ", "
-        )}`,
+        message: `Invalid status. Must be one of: ${allowedStatuses.join(", ")}`,
       });
     }
 
+    // جلب الأوردر من قاعدة البيانات
     const order = await Order.findById(req.params.id);
 
-    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (!order) {
+      return res.status(404).json({ message: "Order not found" });
+    }
 
-    order.orderStatus = status;
+    const userRole = req.user.role;
+    const userId = req.user.id;
+
+    if (userRole === "admin") {
+      order.orderStatus = status;
+    } else if (userRole === "user" && order.user.toString() === userId) {
+      order.orderStatus = status;
+    } else {
+      return res.status(403).json({
+        message: "You do not have permission to update this order status",
+      });
+    }
+
+    // حفظ التغييرات
     await order.save();
 
+    // إرسال إشعار عبر WebSocket
     req.io.emit("update-order", {
-      message: `Order ${order._id} status updated to ${order.status}`,
+      message: `Order ${order._id} status updated to ${order.orderStatus}`,
       orderId: order._id,
-      status: order.status,
+      status: order.orderStatus,
     });
-    res.json({ message: "Order status updated", order });
+
+    // الرد على العميل
+    res.status(200).json({
+      success: true,
+      message: "Order status updated successfully",
+      order,
+    });
+
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Server error while updating order status",
+      error: err.message,
+    });
   }
 };
-
 exports.getAllOrders = async (req, res) => {
   try {
     if (req.user.role !== "admin")
