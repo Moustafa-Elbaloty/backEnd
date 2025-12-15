@@ -1,8 +1,10 @@
 const express = require("express");
 const router = express.Router();
+
+const upload = require("../middleware/uploadMemory");
 const { protect } = require("../middleware/authMiddleware");
 const { authorizeRole } = require("../middleware/roleMiddleware");
-const upload = require("../middleware/uploadImageMiddleware"); // <- multer (يقبل الصور + pdf)
+const validateUploads = require("../middleware/validateUploads");
 
 const {
   createVendor,
@@ -12,30 +14,20 @@ const {
   getVendorProfile,
   getVendorDashboard,
   getAllVendors,
-  
 } = require("../controllers/vendorController");
 
 // =====================
 // Vendor / User Routes
 // =====================
 
-// إنشاء Vendor جديد (لـ user بعد التسجيل)
-// ملاحظة: أسماء الحقول فى الـ frontend لازم تكون مطابقة: idCard, commercialReg, otherDocs
-router.post(
-  "/create",
-  protect,
-  upload.fields([
-    { name: "idCard", maxCount: 1 },
-    { name: "commercialReg", maxCount: 1 },
-    { name: "otherDocs", maxCount: 5 },
-  ]),
-  createVendor
-);
-
+// إنشاء Vendor جديد (Cloudinary)
+// frontend يرسل Base64: idCard, commercialReg, otherDocs
+router.post("/create", protect, upload.fields([{ name: "idCard", maxCount: 1 },
+{ name: "commercialReg", maxCount: 1 }, { name: "otherDocs", maxCount: 5 },]), createVendor);
 // جلب بيانات البائع الحالي
 router.get("/profile", protect, getVendorProfile);
 
-// تحديث بيانات البائع الحالي (store name + إمكانية رفع مستندات إضافية)
+// تحديث بيانات البائع الحالي
 router.put(
   "/update",
   protect,
@@ -46,7 +38,6 @@ router.put(
   ]),
   updateVendor
 );
-
 // حذف حساب البائع الحالي
 router.delete("/delete", protect, deleteVendor);
 
@@ -59,7 +50,5 @@ router.get("/products", protect, getVendorProducts);
 
 // Dashboard خاص بالبائع فقط
 router.get("/dashboard", protect, authorizeRole("vendor"), getVendorDashboard);
-
-
 
 module.exports = router;
