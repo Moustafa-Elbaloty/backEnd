@@ -2,13 +2,29 @@ const vendorModel = require("../models/vendorModel");
 const userModel = require("../models/userModel");
 const productModel = require("../models/productModel");
 const mongoose = require("mongoose");
-const fs = require("fs");
-const path = require("path");
-// If you use AWS S3 uncomment and configure
-// const AWS = require("aws-sdk");
-// const s3 = new AWS.S3({ /* credentials / region */ });
 
-//  إنشاء Vendor جديد (Vendor Registration)
+const cloudinary = require("../config/cloudinary");
+
+
+// ===============================
+// Helper: upload Base64 to Cloudinary (Node safe)
+// ===============================
+const uploadBufferToCloudinary = (buffer, options = {}) => {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      options,
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result);
+      }
+    );
+    stream.end(buffer);
+  });
+};
+
+// ===============================
+// Create Vendor
+// ===============================
 const createVendor = async (req, res) => {
   try {
     const { storeName } = req.body;
@@ -16,11 +32,39 @@ const createVendor = async (req, res) => {
     if (!storeName) {
       return res.status(400).json({
         success: false,
-        message: "Store name is required",
+        message: "storeName is required",
       });
     }
 
-    // Check if this user is already a vendor
+    if (!req.files?.idCard || !req.files?.commercialReg) {
+      return res.status(400).json({
+        success: false,
+        message: "idCard and commercialReg are required",
+      });
+    }
+
+    // ===============================
+    // 🔒 FILE VALIDATION (IMPORTANT)
+    // ===============================
+    const idCardFile = req.files.idCard[0];
+    const commercialRegFile = req.files.commercialReg[0];
+
+    // idCard لازم صورة
+    if (!idCardFile.mimetype.startsWith("image/")) {
+      return res.status(400).json({
+        success: false,
+        message: "idCard must be an image (jpg, png, etc.)",
+      });
+    }
+
+    // commercialReg لازم PDF فقط
+    if (commercialRegFile.mimetype !== "application/pdf") {
+      return res.status(400).json({
+        success: false,
+        message: "commercialReg must be a PDF file",
+      });
+    }
+
     const existingVendor = await vendorModel.findOne({ user: req.user.id });
     if (existingVendor) {
       return res.status(400).json({
@@ -29,13 +73,77 @@ const createVendor = async (req, res) => {
       });
     }
 
-    // Create Vendor for this user
+    // ===============================
+    // 🖼️ Upload idCard (IMAGE)
+    // ===============================
+    const idCardUpload = await uploadBufferToCloudinary(
+      idCardFile.buffer,
+      {
+        folder: "vendors/id-cards",
+        resource_type: "image",
+      }
+    );
+
+    // ===============================
+    // 📄 Upload commercialReg (PDF)
+    // ===============================
+    const commercialRegUpload = await uploadBufferToCloudinary(
+      commercialRegFile.buffer,
+      {
+        folder: "vendors/commercial-reg",
+        resource_type: "raw",
+      }
+    );
+
+    // ===============================
+    // 📎 otherDocs (optional)
+    // ===============================
+    const uploadedOtherDocs = [];
+
+    if (req.files.otherDocs) {
+      for (const file of req.files.otherDocs) {
+        const uploaded = await uploadBufferToCloudinary(file.buffer, {
+          folder: "vendors/other-docs",
+          resource_type:
+            file.mimetype === "application/pdf" ? "raw" : "image",
+        });
+
+        uploadedOtherDocs.push({
+          field: "otherDocs",
+          filename: uploaded.public_id,
+          originalName: file.originalname,
+          mimeType: file.mimetype,
+          size: file.size,
+        });
+      }
+    }
+
+    // ===============================
+    // Create Vendor
+    // ===============================
     const vendor = await vendorModel.create({
       user: req.user.id,
       storeName,
+      documents: [
+        {
+          field: "idCard",
+          filename: idCardUpload.public_id,
+          originalName: idCardFile.originalname,
+          mimeType: idCardFile.mimetype,
+          size: idCardFile.size,
+        },
+        {
+          field: "commercialReg",
+          filename: commercialRegUpload.public_id,
+          originalName: commercialRegFile.originalname,
+          mimeType: commercialRegFile.mimetype,
+          size: commercialRegFile.size,
+        },
+        ...uploadedOtherDocs,
+      ],
+      isVerified: false,
     });
 
-    // Update user role to vendor
     await userModel.findByIdAndUpdate(req.user.id, { role: "vendor" });
 
     res.status(201).json({
@@ -44,6 +152,7 @@ const createVendor = async (req, res) => {
       data: vendor,
     });
   } catch (error) {
+    console.error("Create Vendor Error:", error);
     res.status(500).json({
       success: false,
       message: "Error creating vendor",
@@ -52,7 +161,12 @@ const createVendor = async (req, res) => {
   }
 };
 
-//  Get vendor profile (vendor details)
+
+
+
+// =====================
+// Get Vendor Profile
+// =====================
 const getVendorProfile = async (req, res) => {
   try {
     const vendor = await vendorModel
@@ -78,20 +192,58 @@ const getVendorProfile = async (req, res) => {
   }
 };
 
-// Update vendor info (store name)
+// =====================
+// Update Vendor
+// =====================
 const updateVendor = async (req, res) => {
   try {
     const { storeName } = req.body;
 
     const vendor = await vendorModel.findOne({ user: req.user.id });
-
     if (!vendor) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Vendor not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Vendor not found",
+      });
     }
 
     if (storeName) vendor.storeName = storeName;
+
+    // 🖼️ Update idCard
+    if (req.files?.idCard) {
+      const uploaded = await uploadBufferToCloudinary(
+        req.files.idCard[0].buffer,
+        {
+          folder: "vendors/id-cards",
+          resource_type: "image",
+        }
+      );
+      vendor.documents.idCard = uploaded.secure_url;
+    }
+
+    // 📄 Update commercialReg
+    if (req.files?.commercialReg) {
+      const uploaded = await uploadBufferToCloudinary(
+        req.files.commercialReg[0].buffer,
+        {
+          folder: "vendors/commercial-reg",
+          resource_type: "raw",
+        }
+      );
+      vendor.documents.commercialReg = uploaded.secure_url;
+    }
+
+    // 📎 Update otherDocs
+    if (req.files?.otherDocs) {
+      for (const file of req.files.otherDocs) {
+        const uploaded = await uploadBufferToCloudinary(file.buffer, {
+          folder: "vendors/other-docs",
+          resource_type:
+            file.mimetype === "application/pdf" ? "raw" : "image",
+        });
+        vendor.documents.otherDocs.push(uploaded.secure_url);
+      }
+    }
 
     await vendor.save();
 
@@ -109,35 +261,16 @@ const updateVendor = async (req, res) => {
   }
 };
 
-// Get all products for this vendor
+
+// =====================
+// Get Vendor Products
+// =====================
 const getVendorProducts = async (req, res) => {
   try {
-    let vendor;
+    const vendor = await vendorModel.findOne({ user: req.user.id }).populate("products");
 
-    if (req.user.role === "vendor") {
-      // التاجر -> يجيب منتجاته هو
-      vendor = await vendorModel.findOne({ user: req.user.id }).populate(
-        "products"
-      );
-
-      if (!vendor)
-        return res
-          .status(404)
-          .json({ success: false, message: "Vendor not found" });
-    } else if (req.user.role === "admin") {
-      // الأدمن -> لازم ID في params
-      const { id } = req.params;
-
-      vendor = await vendorModel.findById(id).populate("products");
-
-      if (!vendor)
-        return res
-          .status(404)
-          .json({ success: false, message: "Vendor not found" });
-    } else {
-      return res
-        .status(403)
-        .json({ success: false, message: "Access denied" });
+    if (!vendor) {
+      return res.status(404).json({ success: false, message: "Vendor not found" });
     }
 
     res.status(200).json({
@@ -154,10 +287,11 @@ const getVendorProducts = async (req, res) => {
   }
 };
 
-// ✅ Get Vendor Dashboard
+// =====================
+// Vendor Dashboard
+// =====================
 const getVendorDashboard = async (req, res) => {
   try {
-    // 🔹 1. جلب بيانات البائع مع بيانات المستخدم (للحصول على email مثلاً)
     const vendor = await vendorModel
       .findOne({ user: req.user.id })
       .populate("user", "name email");
@@ -169,10 +303,8 @@ const getVendorDashboard = async (req, res) => {
       });
     }
 
-    // 🔹 2. جلب المنتجات الخاصة بالبائع — استخدم vendor._id (ليس user id)
     const products = await productModel.find({ vendor: vendor._id });
 
-    // 🔹 3. حساب الإحصائيات
     const totalProducts = products.length;
     const totalStock = products.reduce((acc, p) => acc + (p.stock || 0), 0);
     const totalValue = products.reduce(
@@ -180,20 +312,10 @@ const getVendorDashboard = async (req, res) => {
       0
     );
 
-    // 🔹 4. تجهيز الرد
     res.status(200).json({
       success: true,
       message: `Welcome ${vendor.storeName}!`,
-      vendorInfo: {
-        name: vendor.storeName,
-        email: vendor.user ? vendor.user.email : undefined,
-        country: vendor.country,
-      },
-      stats: {
-        totalProducts,
-        totalStock,
-        totalValue,
-      },
+      stats: { totalProducts, totalStock, totalValue },
       products,
     });
   } catch (error) {
@@ -204,7 +326,6 @@ const getVendorDashboard = async (req, res) => {
     });
   }
 };
-
 const getAllVendors = async (req, res) => {
   try {
     if (req.user.role !== "admin")
@@ -226,74 +347,36 @@ const getAllVendors = async (req, res) => {
   }
 };
 
+// =====================
+// Delete Vendor
+// =====================
 const deleteVendor = async (req, res) => {
-  let session;
   try {
-    // فقط Admin أو Vendor نفسه يسمح له
-    if (req.user.role !== "admin" && req.user.role !== "vendor") {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    const { id } = req.params; // لو admin يحذف أي بائع، لو vendor نفسه: req.user.id
-    const vendorId = req.user.role === "vendor" ? req.user.id : id;
-
-    // تحقق من دعم Transaction
-    const isReplicaSet = mongoose.connection.client.topology.s.options.replicaSet;
-    if (isReplicaSet) session = await mongoose.startSession();
-
-    if (session) session.startTransaction();
-
-    // جلب Vendor
-    const vendor = await vendorModel.findById(vendorId).session(session);
+    const vendor = await vendorModel.findOne({ user: req.user.id });
     if (!vendor) {
-      if (session) {
-        await session.abortTransaction();
-        session.endSession();
-      }
-      return res.status(404).json({ success: false, message: "Vendor not found" });
+      return res.status(404).json({ message: "Vendor not found" });
     }
 
-    // جلب المنتجات المرتبطة بالـ Vendor
-    const products = await productModel.find({ vendor: vendor._id }).session(session);
-
-    // حذف ملفات المنتجات بالتوازي
-    await Promise.all(products.map(p => deleteProductFiles(p)));
-
-    // حذف المنتجات من DB
-    await productModel.deleteMany({ vendor: vendor._id }).session(session);
-
-    // حذف Vendor نفسه
-    await vendorModel.deleteOne({ _id: vendor._id }).session(session);
-
-    // تحويل الدور إلى user
-    await userModel.findByIdAndUpdate(vendor.user, { role: "user" }, { session });
-
-    if (session) {
-      await session.commitTransaction();
-      session.endSession();
-    }
+    await productModel.deleteMany({ vendor: vendor._id });
+    await vendorModel.deleteOne({ _id: vendor._id });
+    await userModel.findByIdAndUpdate(vendor.user, { role: "user" });
 
     res.status(200).json({
       success: true,
-      message: "Vendor and their products deleted successfully",
-      deletedProducts: products.length
+      message: "Vendor deleted successfully",
     });
   } catch (error) {
-    if (session) {
-      await session.abortTransaction();
-      session.endSession();
-    }
     res.status(500).json({
       success: false,
       message: "Error deleting vendor",
-      error: error.message
+      error: error.message,
     });
   }
 };
 
 module.exports = {
   getAllVendors,
-  
+
   createVendor,
   getVendorProfile,
   updateVendor,
