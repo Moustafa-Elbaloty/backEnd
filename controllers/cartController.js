@@ -334,38 +334,4 @@ exports.getAllCarts = async (req, res) => {
 
 
 
-exports.deleteCart = async (req, res) => {
-  try {
-    if (req.user.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied: insufficient permissions",
-      });
-    }
 
-    const { cartId } = req.params;
-
-    if (!cartId) {
-      return res.status(400).json({
-        success: false,
-        message: "Cart ID is required",
-      });
-    }
-
-    const cart = await Cart.findOneAndDelete({ _id: cartId });
-
-    if (!cart) {
-      return res.status(404).json({
-        success: false,
-        message: "Cart not found",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Cart deleted successfully",
-    });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
