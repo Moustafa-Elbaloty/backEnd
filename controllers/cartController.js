@@ -242,7 +242,7 @@ exports.updateCartItem = async (req, res) => {
 // ============================
 //     REMOVE ITEM FROM CART
 // ============================
-exports.removeFromCart = async (req, res) => {
+expexports.removeFromCart = async (req, res) => {
   try {
     const { productId, userId } = req.params; // هنا خدنا userId من params
     const id = req.user.role === "admin" && userId ? userId : req.user.id;
@@ -254,7 +254,15 @@ exports.removeFromCart = async (req, res) => {
     ).populate("items.product");
 
     if (!cart || !cart.items || cart.items.length === 0) {
-      return res.json({ items: [], totalItems: 0, totalPrice: 0 });
+      return res.status(200).json({
+        success: true,
+        message: "Item removed successfully and cart is empty",
+        cart: {
+          items: [],
+          totalItems: 0,
+          totalPrice: 0,
+        },
+      });
     }
 
     let totalPrice = 0, totalItems = 0;
@@ -271,10 +279,15 @@ exports.removeFromCart = async (req, res) => {
       totalItems: cart.items.length,
     });
 
-    res.json({
-      ...cart.toObject(),
-      totalPrice: totalPrice.toFixed(2),
-      totalItems,
+    res.status(200).json({
+      success: true,
+      message: "Item removed successfully",
+      cart: {
+        id: cart._id,
+        items: cart.items,
+        totalItems,
+        totalPrice: Number(totalPrice.toFixed(2)),
+      },
     });
 
   } catch (err) {
