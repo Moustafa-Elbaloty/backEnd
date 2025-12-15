@@ -77,11 +77,15 @@ const loginUser = async (req, res) => {
     }
 
     res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
+      success: true,
       token: generateToken(user._id, user.role),
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        avatar: user.avatar || "user.png"
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -395,4 +399,4 @@ const verifyVendor = async (req, res) => {
 };
 
 
-module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, changePassword ,logout};
+module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, changePassword, logout };
