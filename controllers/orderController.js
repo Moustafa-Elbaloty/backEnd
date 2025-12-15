@@ -110,18 +110,56 @@ exports.getMyOrders = async (req, res) => {
 // 🟢 Get single order
 exports.getOrderById = async (req, res) => {
   try {
-    const order = await Order.findOne({
-      _id: req.params.id,
-      user: req.user.id,
-    })
-      .populate("items.product")
-      .populate("vendor");
+    const orderId = req.params.id;
 
-    if (!order) return res.status(404).json({ message: "Order not found" });
+    // جلب الأوردر بدون user أو vendor
+    const order = await Order.findById(orderId)
+      .populate("items.product", "name price image");
 
-    res.json(order);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // السماح فقط للأدمن
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied: only admin can view this order",
+      });
+    }
+
+    // تجهيز البيانات بدون أي user أو vendor
+    const orderData = {
+      id: order._id,
+      items: order.items.map(item => ({
+        product: item.product,
+        quantity: item.quantity,
+        price: item.price,
+        totalItemPrice: item.totalItemPrice,
+      })),
+      totalPrice: order.totalPrice,
+      paymentMethod: order.paymentMethod,
+      orderStatus: order.orderStatus,
+      paymentStatus: order.paymentStatus,
+      adminCommission: order.adminCommission,
+      sellerAmount: order.sellerAmount,
+      createdAt: order.createdAt,
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Order fetched successfully",
+      data: orderData,
+    });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching order",
+      error: err.message,
+    });
   }
 };
 
@@ -271,50 +309,4 @@ exports.getAllOrders = async (req, res) => {
   }
 };
 
-exports.getOrderById = async (req, res) => {
-  try {
-    const orderId = req.params.id;
 
-    const order = await Order.findById(orderId)
-      .populate("user", "name email role")
-      .populate("vendor", "name email")
-      .populate("items.product", "name price image");
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    // منع مستخدم يشوف طلبات غيره إلا لو Admin
-    if (req.user.role !== "admin" && order.user._id.toString() !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied: you can only view your own orders",
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      order: {
-        id: order._id,
-        items: order.items.map(item => ({
-          product: item.product,
-          quantity: item.quantity,
-          price: item.price,
-          totalItemPrice: item.totalItemPrice,
-        })),
-        totalPrice: order.totalPrice,             
-        paymentMethod: order.paymentMethod,
-        orderStatus: order.orderStatus,
-        paymentStatus: order.paymentStatus,
-        adminCommission: order.adminCommission,
-        sellerAmount: order.sellerAmount,
-        createdAt: order.createdAt,
-        user: order.user,
-        vendor: order.vendor,
-      },
-    });
-
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
