@@ -5,7 +5,6 @@ const router = express.Router();
 const {
   createOrder,
   getMyOrders,
-  getOrderById,
   cancelOrder,
   updateOrderStatus,
 } = require("../controllers/orderController");
@@ -25,8 +24,5 @@ router.put("/cancel/:id", protect, cancelOrder);
 
 // PUT /api/orders/:id/status
 router.put("/:id/status", protect, updateOrderStatus);
-
-// GET /api/orders/:id
-router.get("/:id", protect, getOrderById);
 
 module.exports = router;
