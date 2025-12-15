@@ -5,7 +5,7 @@ const {getAllProductsAdmin} = require("../controllers/productController");
 
 const { getCart, addToCart, removeFromCart, updateCartItem, getAllCarts} = require("../controllers/cartController");
 
-const {getAllOrders} = require("../controllers/orderController");
+const {getAllOrders, getOrderById} = require("../controllers/orderController");
 
 const {getAllPayments,  getAdminDashboardStats} = require("../controllers/paymentController");
 
@@ -42,6 +42,8 @@ router.delete( "/cart/remove/:productId/:userId", protect, authorizeRole("admin"
 
 // REQ: GET /api/admin/orders
 router.get("/orders", protect, authorizeRole("admin"), getAllOrders);
+
+router.get("/order/:id", protect, authorizeRole("admin"), getOrderById)
 
 
 // =======================================================
@@ -95,4 +97,5 @@ router.get( "/vendors/products/:id", protect, authorizeRole("admin"), getVendorP
 
 
 module.exports = router;
+
 
