@@ -3,7 +3,7 @@ const router = express.Router();
 
 const {getAllProductsAdmin} = require("../controllers/productController");
 
-const { getCart, addToCart, removeFromCart, updateCartItem, getAllCarts, deleteCart} = require("../controllers/cartController");
+const { getCart, addToCart, removeFromCart, updateCartItem, getAllCarts} = require("../controllers/cartController");
 
 const {getAllOrders} = require("../controllers/orderController");
 
@@ -25,9 +25,6 @@ router.get("/cart/:userId", protect, authorizeRole("admin"), getCart);
 
 // REQ: GET /api/admin/cart/
 router.get("/cart/", protect, authorizeRole("admin"), getAllCarts);
-
-// REQ: DELETE /api/admin/cart/delete/:cartId
-router.delete("/cart/delete/:cartId", protect, authorizeRole("admin"), deleteCart);
 
 // REQ: POST /api/admin/cart/add/:userId
 router.post("/cart/add/:userId", protect, authorizeRole("admin"), addToCart);
@@ -98,3 +95,4 @@ router.get( "/vendors/products/:id", protect, authorizeRole("admin"), getVendorP
 
 
 module.exports = router;
+
