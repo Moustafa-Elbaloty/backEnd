@@ -94,52 +94,6 @@ const loginUser = async (req, res) => {
     });
   }
 };
-const googleLogin = async (req, res) => {
-  try {
-    const { email, name, googleId } = req.body;
-
-    if (!email || !googleId) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Google data"
-      });
-    }
-
-    let user = await User.findOne({ email });
-
-    if (!user) {
-      user = await User.create({
-        name,
-        email,
-        password: crypto.randomBytes(20).toString("hex"),
-        phone: "0000000000",
-        isEmailVerified: true
-      });
-    }
-
-
-    const token = generateToken(user._id, user.role);
-
-    res.status(200).json({
-      success: true,
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    });
-
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Google login failed",
-      error: error.message
-    });
-  }
-};
-
 const verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
@@ -445,4 +399,4 @@ const verifyVendor = async (req, res) => {
 };
 
 
-module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, changePassword, logout, googleLogin };
+module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, changePassword, logout };
