@@ -251,7 +251,7 @@ const changePassword = async (req, res) => {
     if (!currentPassword || !newPassword || !confirmNewPassword) {
       return res.status(400).json({
         success: false,
-        message: "من فضلك أدخل جميع الحقول المطلوبة",
+        message: "م جميع الحقول المطلوبة",
       });
     }
 
@@ -259,7 +259,7 @@ const changePassword = async (req, res) => {
     if (newPassword !== confirmNewPassword) {
       return res.status(400).json({
         success: false,
-        message: "كلمة المرور الجديدة غير متطابقة",
+        message: "كلمة المرور  غير متطابقة",
       });
     }
 
