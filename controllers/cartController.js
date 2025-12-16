@@ -65,7 +65,7 @@ exports.addToCart = async (req, res) => {
       return res.status(400).json({ message: "Quantity must be at least 1" });
     }
 
-    let id = req.user.role === "admin" && userId ? userId : req.user.id;  
+    let id = req.user.role === "admin" && userId ? userId : req.user.id;
 
     // جلب المنتج للتحقق من الستوك
     const product = await Product.findById(productId);
@@ -242,7 +242,7 @@ exports.updateCartItem = async (req, res) => {
 // ============================
 //     REMOVE ITEM FROM CART
 // ============================
-expexports.removeFromCart = async (req, res) => {
+exports.removeFromCart = async (req, res) => {
   try {
     const { productId, userId } = req.params; // هنا خدنا userId من params
     const id = req.user.role === "admin" && userId ? userId : req.user.id;
