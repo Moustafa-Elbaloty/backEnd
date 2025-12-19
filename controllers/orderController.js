@@ -1,45 +1,47 @@
 const Order = require("../models/orderModel");
 const Cart = require("../models/cartModel");
-const User = require("../models/userModel");
 const Product = require("../models/productModel");
+const paymobService = require("../services/paymobService");
 
-// 🟢 Create Order (Checkout)
+// ==============================
+// 🟢 Create Order (Cash / Paymob)
+// ==============================
 exports.createOrder = async (req, res) => {
   try {
     const { paymentMethod, vendorId } = req.body;
 
-    // التحقق من paymentMethod
-    if (
-      !paymentMethod ||
-      !["cash", "stripe", "paypal"].includes(paymentMethod)
-    ) {
+    // 1️⃣ Validate payment method
+    if (!["cash", "stripe", "paypal", "paymob"].includes(paymentMethod)) {
       return res.status(400).json({
-        message: "Invalid payment method. Must be: cash, stripe, or paypal",
+        success: false,
+        message: "Invalid payment method",
       });
     }
 
+    // 2️⃣ Get cart
     const cart = await Cart.findOne({ user: req.user.id }).populate(
       "items.product"
     );
 
     if (!cart || cart.items.length === 0) {
-      return res.status(400).json({ message: "Cart is empty" });
-    }
-
-    // فلترة المنتجات المحذوفة أو المش موجودة
-    const validItems = cart.items.filter((item) => item.product !== null);
-
-    if (validItems.length === 0) {
-      // لو كل المنتجات محذوفة، نظف الكارت
-      cart.items = [];
-      await cart.save();
       return res.status(400).json({
-        message:
-          "All products in cart are no longer available. Cart has been cleared.",
+        success: false,
+        message: "Cart is empty",
       });
     }
 
-    // لو في منتجات محذوفة، نظف الكارت منهم
+    // 3️⃣ Remove deleted products
+    const validItems = cart.items.filter((item) => item.product !== null);
+
+    if (validItems.length === 0) {
+      cart.items = [];
+      await cart.save();
+      return res.status(400).json({
+        success: false,
+        message: "All products in cart are no longer available",
+      });
+    }
+
     if (validItems.length < cart.items.length) {
       cart.items = validItems.map((item) => ({
         product: item.product._id,
@@ -48,7 +50,7 @@ exports.createOrder = async (req, res) => {
       await cart.save();
     }
 
-    // إنشاء orderItems من المنتجات الصالحة فقط
+    // 4️⃣ Build order items
     const orderItems = validItems.map((item) => ({
       product: item.product._id,
       quantity: item.quantity,
@@ -56,64 +58,236 @@ exports.createOrder = async (req, res) => {
       totalItemPrice: item.product.price * item.quantity,
     }));
 
+    // 5️⃣ Calculate total
     const totalPrice = orderItems.reduce(
-      (total, item) => total + item.totalItemPrice,
+      (sum, item) => sum + item.totalItemPrice,
       0
     );
-const adminCommission = totalPrice * 0.10; // 10%
-const sellerAmount = totalPrice - adminCommission;
 
-const order = await Order.create({
-  user: req.user.id,
-  vendor: vendorId || null,
-  items: orderItems,
-  paymentMethod,
-  totalPrice,
-  adminCommission,
-  sellerAmount
-});
+    const adminCommission = totalPrice * 0.1;
+    const sellerAmount = totalPrice - adminCommission;
 
+    // 6️⃣ Create order
+    const order = await Order.create({
+      user: req.user.id,
+      vendor: vendorId || null,
+      items: orderItems,
+      paymentMethod,
+      totalPrice,
+      adminCommission,
+      sellerAmount,
+      paymentStatus: paymentMethod === "cash" ? "pending" : "pending",
+      orderStatus: "pending",
+    });
 
-    // تفريغ الكارت بعد إنشاء الطلب
+    // 7️⃣ Clear cart
     cart.items = [];
     await cart.save();
 
-req.io.emit("new-order", {
-  message: `New order by ${req.user.name}`,
-  orderId: order._id,
-  amount: order.amount,
-});
+    // ======================
+    // 🟢 Paymob Payment Flow
+    // ======================
+    if (paymentMethod === "paymob") {
+      const amountCents = Math.round(totalPrice * 100);
 
+      const authToken = await paymobService.getAuthToken();
 
-    res.json({
+      const paymobOrder = await paymobService.createOrder(
+        authToken,
+        amountCents
+      );
+
+      const paymentKey = await paymobService.getPaymentKey(
+        authToken,
+        paymobOrder.id,
+        amountCents,
+        req.user
+      );
+
+      order.paymobOrderId = paymobOrder.id;
+      await order.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Paymob payment initialized",
+        iframeUrl: `https://accept.paymob.com/api/acceptance/iframes/${process.env.PAYMOB_IFRAME_ID}?payment_token=${paymentKey}`,
+        orderId: order._id,
+      });
+    }
+
+    // ======================
+    // 🟢 Cash Order Response
+    // ======================
+    return res.status(201).json({
+      success: true,
       message: "Order created successfully",
       order,
     });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+
+  } catch (error) {
+    console.error("Create Order Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while creating order",
+      error: error.message,
+    });
   }
 };
 
-// 🟢 Get all orders for current user
+// ==============================
+// 🟢 Get My Orders
+// ==============================
 exports.getMyOrders = async (req, res) => {
   try {
     const orders = await Order.find({ user: req.user.id })
       .populate("items.product")
       .populate("vendor");
 
-    res.json(orders);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(200).json({
+      success: true,
+      data: orders,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
-// 🟢 Get single order
+// ==============================
+// 🟢 Cancel Order (Pending Only)
+// ==============================
+exports.cancelOrder = async (req, res) => {
+  try {
+    let order;
+
+    if (req.user.role === "admin") {
+      order = await Order.findById(req.params.id);
+    } else {
+      order = await Order.findOne({
+        _id: req.params.id,
+        user: req.user.id,
+      });
+    }
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    if (order.orderStatus !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Only pending orders can be cancelled",
+      });
+    }
+
+    order.orderStatus = "cancelled";
+    order.paymentStatus = "failed";
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Order cancelled successfully",
+      order,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ==============================
+// 🟢 Update Order Status (Admin)
+// ==============================
+exports.updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+
+    const allowedStatuses = [
+      "pending",
+      "processing",
+      "shipped",
+      "delivered",
+      "cancelled",
+    ];
+
+    if (!allowedStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid order status",
+      });
+    }
+
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    order.orderStatus = status;
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Order status updated",
+      order,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+// ==============================
+// 🟢 Get All Orders (Admin)
+// ==============================
+exports.getAllOrders = async (req, res) => {
+  try {
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied",
+      });
+    }
+
+    const orders = await Order.find()
+      .populate("user", "name email")
+      .populate("vendor", "name email")
+      .populate("items.product", "name price image");
+
+    res.status(200).json({
+      success: true,
+      data: orders,
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+// ==============================
+// 🟢 Get Single Order By ID (Admin)
+// ==============================
 exports.getOrderById = async (req, res) => {
   try {
-    const orderId = req.params.id;
-
-    // جلب الأوردر بدون user أو vendor
-    const order = await Order.findById(orderId)
+    const order = await Order.findById(req.params.id)
+      .populate("user", "name email")
+      .populate("vendor", "name email")
       .populate("items.product", "name price image");
 
     if (!order) {
@@ -123,162 +297,15 @@ exports.getOrderById = async (req, res) => {
       });
     }
 
-    // السماح فقط للأدمن
-    if (req.user.role !== "admin") {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied: only admin can view this order",
-      });
-    }
-
-    // تجهيز البيانات بدون أي user أو vendor
-    const orderData = {
-      id: order._id,
-      items: order.items.map(item => ({
-        product: item.product,
-        quantity: item.quantity,
-        price: item.price,
-        totalItemPrice: item.totalItemPrice,
-      })),
-      totalPrice: order.totalPrice,
-      paymentMethod: order.paymentMethod,
-      orderStatus: order.orderStatus,
-      paymentStatus: order.paymentStatus,
-      adminCommission: order.adminCommission,
-      sellerAmount: order.sellerAmount,
-      createdAt: order.createdAt,
-    };
-
     res.status(200).json({
       success: true,
-      message: "Order fetched successfully",
-      data: orderData,
+      data: order,
     });
-  } catch (err) {
+
+  } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Server error while fetching order",
-      error: err.message,
+      message: error.message,
     });
   }
 };
-
-// 🟢 Cancel order (only pending)
-exports.cancelOrder = async (req, res) => {
-  try {
-    let order;
-
-    if (req.user.role === "admin") {
-      order = await Order.findById(req.params.id);
-    } 
-    else {
-      order = await Order.findOne({
-        _id: req.params.id,
-        user: req.user.id,
-      });
-    }
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    if (order.orderStatus !== "pending") {
-      return res.status(400).json({
-        message: "Only pending orders can be cancelled",
-      });
-    }
-
-    order.orderStatus = "cancelled";
-    await order.save();
-
-    req.io.emit("order-cancelled", {
-      message: `${req.user.name} cancelled order ${order._id}`,
-      orderId: order._id,
-    });
-
-    res.json({ message: "Order cancelled", order });
-
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-exports.updateOrderStatus = async (req, res) => {
-  try {
-    const { status } = req.body;
-
-    // التحقق من الحالة المسموحة
-    const allowedStatuses = [
-      "pending",
-      "processing",
-      "shipped",
-      "delivered",
-      "cancelled",
-    ];
-    if (!status || !allowedStatuses.includes(status)) {
-      return res.status(400).json({
-        message: `Invalid status. Must be one of: ${allowedStatuses.join(
-          ", "
-        )}`,
-      });
-    }
-
-    const order = await Order.findById(req.params.id);
-
-    if (!order) return res.status(404).json({ message: "Order not found" });
-
-    order.orderStatus = status;
-    await order.save();
-
-    req.io.emit("update-order", {
-      message: `Order ${order._id} status updated to ${order.status}`,
-      orderId: order._id,
-      status: order.status,
-    });
-    res.json({ message: "Order status updated", order });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};exports.getAllOrders = async (req, res) => {
-  try {
-    if (req.user.role !== "admin")
-      return res.status(403).json({ message: "Access denied" });
-
-    const { status, paymentStatus, vendorId, userId } = req.query;
-    const filter = {};
-
-    if (status) filter.orderStatus = status;
-    if (paymentStatus) filter.paymentStatus = paymentStatus;
-    if (vendorId) filter.vendor = vendorId;
-    if (userId) filter.user = userId;
-
-    const orders = await Order.find(filter)
-      .populate("user", "name email")
-      .populate("vendor", "name email")
-      .populate("items.product", "name price image");
-
-    if (orders.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No orders found",
-        data: null,
-      });
-    }
-
-    const data = orders.map((order) => ({
-      ...order._doc,
-      sellerAmount: order.totalPrice - order.adminCommission,
-    }));
-
-    res.status(200).json({
-      success: true,
-      message: "Orders fetched successfully",
-      data,
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-
