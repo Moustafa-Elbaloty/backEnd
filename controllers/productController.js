@@ -248,7 +248,7 @@ const getProducts = async (req, res) => {
 
     //  Get current page and limit (with default values and safe range) //
     const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.min(parseInt(req.query.limit) || 10, 100);
+    const limit = Math.min(parseInt(req.query.limit) || 12, 100);
     // products to skip //
     const skip = (page - 1) * limit;
 
