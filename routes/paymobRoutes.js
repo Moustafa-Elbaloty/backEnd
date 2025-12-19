@@ -35,17 +35,19 @@ router.post("/webhook", async (req, res) => {
    Paymob → User Browser
 =========================== */
 router.get("/callback", async (req, res) => {
-  const { success, id } = req.query;
+  const { success, order } = req.query;
 
   if (success === "true") {
-    // 🟢 نجاح الدفع → رجوع للهوم
-    return res.redirect("http://localhost:4200/");
-    // أو:
-    // return res.redirect("http://localhost:4200/payment-success");
+    // 🟢 نجاح الدفع
+    return res.redirect(
+      `http://localhost:4200/payment-result?status=success`
+    );
   }
 
   // 🔴 فشل الدفع
-  return res.redirect("http://localhost:4200/payment-failed");
+  return res.redirect(
+    `http://localhost:4200/payment-result?status=failed`
+  );
 });
 
 module.exports = router;
