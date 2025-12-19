@@ -1,17 +1,21 @@
 const express = require("express");
 const router = express.Router();
 
-// استدعاء الكونترولر الصحيح
+// استدعاء الكونترولر
 const {
   createOrder,
   getMyOrders,
   cancelOrder,
   updateOrderStatus,
+  retryPayment, // 🟢 NEW
 } = require("../controllers/orderController");
-const {authorizeRole} = require("../middleware/roleMiddleware");
 
-// ميدل وير الحماية الموحد
+// ميدل وير الحماية
 const { protect } = require("../middleware/authMiddleware");
+
+// ==============================
+// Orders Routes
+// ==============================
 
 // POST /api/orders/create
 router.post("/create", protect, createOrder);
@@ -24,5 +28,8 @@ router.put("/cancel/:id", protect, cancelOrder);
 
 // PUT /api/orders/:id/status
 router.put("/:id/status", protect, updateOrderStatus);
+
+// 🟢 POST /api/orders/:id/retry-payment
+router.post("/:id/retry-payment", protect, retryPayment);
 
 module.exports = router;

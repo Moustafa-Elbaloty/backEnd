@@ -33,47 +33,53 @@ const orderSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
-    // اختياري: لو عايز تربطه ببائع معيّن
+
     vendor: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
     },
+
     items: [orderItemSchema],
+
     paymentMethod: {
       type: String,
-      enum: ["cash", "stripe", "paypal"],
+      enum: ["cash", "stripe", "paypal", "paymob"],
       required: true,
     },
+
     totalPrice: {
       type: Number,
       required: true,
       min: 0,
     },
-    // 🟢 مبلغ العمولة
+
     adminCommission: {
       type: Number,
       default: 0,
     },
 
-    // 🟢 المبلغ الصافي للبائع
     sellerAmount: {
       type: Number,
       default: 0,
     },
-    // حالة الطلب نفسها
+
     orderStatus: {
       type: String,
       enum: ["pending", "processing", "shipped", "delivered", "cancelled"],
       default: "pending",
     },
-    // حالة الدفع
+
     paymentStatus: {
       type: String,
       enum: ["pending", "paid", "failed"],
       default: "pending",
     },
+
+    // 🔵 Paymob fields
+    paymobOrderId: String,
+    paymobTransactionId: String,
   },
   { timestamps: true }
 );
 
-module.exports = mongoose.models.Order || mongoose.model("Order", orderSchema);
+module.exports = mongoose.model("Order", orderSchema);
