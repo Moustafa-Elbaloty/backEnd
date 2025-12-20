@@ -265,7 +265,14 @@ const getProducts = async (req, res) => {
       if (req.query.minPrice) filter.price.$gte = Number(req.query.minPrice);
       if (req.query.maxPrice) filter.price.$lte = Number(req.query.maxPrice);
     }
-
+    
+    // Filter by price range (min and/or max) //
+    if (req.query.brand) {
+      const brands = req.query.brand.split(',');
+      filter.brand = {
+        $in: brands.map(b => new RegExp(`^${b}$`, 'i'))
+      };
+    }
     // Full-text search (on name, description, etc.) //
     if (req.query.q) {
       filter.name = { $regex: req.query.q, $options: 'i' };
