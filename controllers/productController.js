@@ -248,7 +248,7 @@ const getProducts = async (req, res) => {
 
     //  Get current page and limit (with default values and safe range) //
     const page = Math.max(parseInt(req.query.page) || 1, 1);
-    const limit = Math.min(parseInt(req.query.limit) || 10, 100);
+    const limit = Math.min(parseInt(req.query.limit) || 12, 100);
     // products to skip //
     const skip = (page - 1) * limit;
 
@@ -265,11 +265,17 @@ const getProducts = async (req, res) => {
       if (req.query.minPrice) filter.price.$gte = Number(req.query.minPrice);
       if (req.query.maxPrice) filter.price.$lte = Number(req.query.maxPrice);
     }
-
-    // Full-text search (on name, description, etc.) //
- if (req.query.q) {
-      filter.name = { $regex: req.query.q, $options: 'i' };
+    
+    // Filter by price range (min and/or max) //
+    if (req.query.brand) {
+      const brands = req.query.brand.split(',');
+      filter.brand = {
+        $in: brands.map(b => new RegExp(`^${b}$`, 'i'))
+      };
     }
+    // Full-text search (on name, description, etc.) //
+    if (req.query.q) filter.$text = { $search: req.query.q };
+
     // --sorting --//
 
     const sortField = req.query.sort || "createdAt";
@@ -285,7 +291,7 @@ const getProducts = async (req, res) => {
       productModel.countDocuments(filter),
     ]);
 
-  // أضف حالة outOfStock لكل منتج
+    // أضف حالة outOfStock لكل منتج
     const productsWithStatus = products.map(p => ({
       ...p.toObject(),
       outOfStock: p.stock === 0
@@ -346,7 +352,7 @@ const getProductByID = async (req, res) => {
       });
     }
 
-        // 🔥 Check stock
+    // 🔥 Check stock
     if (product.stock === 0) {
       return res.status(200).json({
         success: true,

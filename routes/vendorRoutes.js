@@ -42,8 +42,16 @@ router.put(
 router.delete("/delete", protect, deleteVendor);
 
 // جلب كل منتجات البائع الحالي
-router.get("/products", protect, getVendorProducts);
-
+router.get(
+  "/products",
+  protect,
+  authorizeRole("vendor", "admin"),
+  (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  },
+  getVendorProducts
+);
 // =====================
 // Vendor Dashboard
 // =====================

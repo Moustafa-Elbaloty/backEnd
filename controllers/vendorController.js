@@ -267,7 +267,13 @@ const updateVendor = async (req, res) => {
 // =====================
 const getVendorProducts = async (req, res) => {
   try {
-    const vendor = await vendorModel.findOne({ user: req.user.id }).populate("products");
+    const vendor = await vendorModel
+      .findOne({ user: req.user.id })
+      .populate({
+        path: "products",
+        options: { sort: { createdAt: -1 } }
+      });
+
 
     if (!vendor) {
       return res.status(404).json({ success: false, message: "Vendor not found" });
@@ -326,6 +332,8 @@ const getVendorDashboard = async (req, res) => {
     });
   }
 };
+
+
 const getAllVendors = async (req, res) => {
   try {
     if (req.user.role !== "admin")
