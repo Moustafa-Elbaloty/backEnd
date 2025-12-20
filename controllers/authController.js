@@ -173,19 +173,19 @@ const loginUser = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
-    // 🟡 Vendor not verified yet
+
     if (user.role === "vendor") {
       const vendor = await vendorModel.findOne({ user: user._id });
 
       if (vendor && !vendor.isVerified) {
         return res.status(403).json({
           success: false,
-          message: "⏳ حسابك قيد المراجعة من الإدارة"
+          message: "⏳ Your account is under admin review"
         });
       }
     }
 
-    // 🔴🔴🔴 الحل هنا (مهم جدًا)
+
     if (user.isBlocked) {
       return res.status(403).json({
         success: false,
