@@ -267,8 +267,9 @@ const getProducts = async (req, res) => {
     }
 
     // Full-text search (on name, description, etc.) //
-    if (req.query.q) filter.$text = { $search: req.query.q };
-
+    if (req.query.q) {
+      filter.name = { $regex: req.query.q, $options: 'i' };
+    }
     // --sorting --//
 
     const sortField = req.query.sort || "createdAt";
@@ -284,7 +285,7 @@ const getProducts = async (req, res) => {
       productModel.countDocuments(filter),
     ]);
 
-  // أضف حالة outOfStock لكل منتج
+    // أضف حالة outOfStock لكل منتج
     const productsWithStatus = products.map(p => ({
       ...p.toObject(),
       outOfStock: p.stock === 0
@@ -345,7 +346,7 @@ const getProductByID = async (req, res) => {
       });
     }
 
-        // 🔥 Check stock
+    // 🔥 Check stock
     if (product.stock === 0) {
       return res.status(200).json({
         success: true,
