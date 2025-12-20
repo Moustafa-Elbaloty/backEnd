@@ -6,7 +6,7 @@ const productSchema = new mongoose.Schema({
         required: [true, "Product Name Is Required"],
         trim: true,
         minLength: [2, "product name must be at least 2 characters"],
-        maxLength: [50, "product name must be at least 50 characters"],
+        maxLength: [50, "product name must be at most 50 characters"],
     },
     price: {
         type: Number,
@@ -23,7 +23,7 @@ const productSchema = new mongoose.Schema({
     category: {
         type: String,
         required: true,
-        enum: ["electronics", "smart phones","home & kitchen","books & media"],
+        enum: ["electronics", "smart phones", "home & kitchen", "books & media"],
     },
     stock: {
         type: Number,

@@ -279,6 +279,71 @@ exports.getAllOrders = async (req, res) => {
     });
   }
 };
+// ==============================
+// 🟢 Retry Paymob Payment
+// ==============================
+exports.retryPayment = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).populate("user");
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
+    }
+
+    // لازم يكون Paymob + Pending
+    if (order.paymentMethod !== "paymob") {
+      return res.status(400).json({
+        success: false,
+        message: "This order is not Paymob payment",
+      });
+    }
+
+    if (order.paymentStatus !== "pending") {
+      return res.status(400).json({
+        success: false,
+        message: "Payment is already completed",
+      });
+    }
+
+    // 🔁 Create new Paymob payment session
+    const amountCents = Math.round(order.totalPrice * 100);
+
+    const authToken = await paymobService.getAuthToken();
+
+    const paymobOrder = await paymobService.createOrder(
+      authToken,
+      amountCents
+    );
+
+    const paymentKey = await paymobService.getPaymentKey(
+      authToken,
+      paymobOrder.id,
+      amountCents,
+      order.user
+    );
+
+    // تحديث order ببيانات Paymob الجديدة
+    order.paymobOrderId = paymobOrder.id;
+    await order.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment retry initialized",
+      iframeUrl: `https://accept.paymob.com/api/acceptance/iframes/${process.env.PAYMOB_IFRAME_ID}?payment_token=${paymentKey}`,
+    });
+
+  } catch (error) {
+    console.error("Retry Payment Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error while retrying payment",
+      error: error.message,
+    });
+  }
+};
 
 // ==============================
 // 🟢 Get Single Order By ID (Admin)
