@@ -143,6 +143,17 @@ const loginUser = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
+    // 🟡 Vendor not verified yet
+    if (user.role === "vendor") {
+      const vendor = await vendorModel.findOne({ user: user._id });
+
+      if (vendor && !vendor.isVerified) {
+        return res.status(403).json({
+          success: false,
+          message: "⏳ حسابك قيد المراجعة من الإدارة"
+        });
+      }
+    }
 
     // 🔴🔴🔴 الحل هنا (مهم جدًا)
     if (user.isBlocked) {
@@ -455,7 +466,9 @@ const verifyVendor = async (req, res) => {
       });
     }
 
-    vendor.verified = true;
+    vendor.isVerified = true;
+    vendor.verifiedAt = new Date();
+
     await vendor.save();
 
     res.status(200).json({
