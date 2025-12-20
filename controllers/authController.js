@@ -48,6 +48,79 @@ const registerUser = async (req, res) => {
     });
   }
 };
+const registerVendor = async (req, res) => {
+  try {
+    const { name, email, password, phone, storeName } = req.body;
+
+    if (!name || !email || !password || !phone || !storeName) {
+      return res.status(400).json({ message: "الرجاء ملء جميع البيانات" });
+    }
+
+    if (!req.files || (!req.files.idCard && !req.files.commercialRegister)) {
+      return res.status(400).json({ message: "مستندات التاجر مطلوبة" });
+    }
+
+    const userExists = await User.findOne({ email });
+    if (userExists) {
+      return res.status(400).json({ message: "البريد مسجل مسبقًا" });
+    }
+
+    // 1️⃣ إنشاء المستخدم بدور vendor
+    const user = await User.create({
+      name,
+      email,
+      password,
+      phone,
+      role: "vendor",
+    });
+
+    // 2️⃣ تجهيز documents array
+    const documents = [];
+
+    if (req.files.idCard) {
+      const file = req.files.idCard[0];
+      documents.push({
+        filename: file.filename,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+        field: "idCard",
+      });
+    }
+
+    if (req.files.commercialRegister) {
+      const file = req.files.commercialRegister[0];
+      documents.push({
+        filename: file.filename,
+        originalName: file.originalname,
+        mimeType: file.mimetype,
+        size: file.size,
+        field: "commercialReg",
+      });
+    }
+
+    // 3️⃣ إنشاء vendor profile
+    const vendor = await vendorModel.create({
+      user: user._id,
+      storeName,
+      documents,
+      isVerified: false,
+    });
+
+    res.status(201).json({
+      message: "تم تسجيل التاجر بنجاح، في انتظار موافقة الإدارة",
+      vendorId: vendor._id,
+    });
+
+  } catch (error) {
+    console.error("Vendor Register Error:", error);
+    res.status(500).json({
+      message: "خطأ أثناء تسجيل التاجر",
+      error: error.message,
+    });
+  }
+};
+
 
 // Login
 const loginUser = async (req, res) => {
@@ -392,6 +465,6 @@ module.exports = {
   verifyEmail,
   forgotPassword,
   resetPassword,
-  changePassword,
+  changePassword, registerVendor,
   logout,
 };
