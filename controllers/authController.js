@@ -173,23 +173,20 @@ const loginUser = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
-    // 🟡 Vendor not verified yet
-    if (user.role === "vendor") {
-      const vendor = await vendorModel.findOne({ user: user._id });
 
-      if (vendor && !vendor.isVerified) {
-        return res.status(403).json({
-          success: false,
-          message: "⏳ حسابك قيد المراجعة من الإدارة"
-        });
-      }
+    // 🟡 Vendor approval check (FINAL)
+    if (user.role === "vendor" && user.vendorStatus !== "approved") {
+      return res.status(403).json({
+        success: false,
+        message: "⏳ حسابك قيد المراجعة من الإدارة",
+      });
     }
 
-    // 🔴🔴🔴 الحل هنا (مهم جدًا)
+    // 🔴 Blocked user
     if (user.isBlocked) {
       return res.status(403).json({
         success: false,
-        message: "🚫 This account has been blocked. Please contact support for assistance.",
+        message: "🚫 This account has been blocked. Please contact support.",
       });
     }
 
@@ -201,7 +198,7 @@ const loginUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        avatar: user.avatar || "user.png",
+        vendorStatus: user.vendorStatus,
       },
     });
   } catch (error) {
@@ -211,6 +208,7 @@ const loginUser = async (req, res) => {
     });
   }
 };
+
 
 // ================= Verify Email =================
 const verifyEmail = async (req, res) => {

@@ -36,37 +36,52 @@ const userSchema = new mongoose.Schema(
       required: [true, "Phone number is required"],
       trim: true,
     },
+
     role: {
       type: String,
       enum: ["user", "vendor", "admin"],
       default: "user",
     },
 
+    // ✅ Vendor approval status
+    vendorStatus: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: function () {
+        return this.role === "vendor" ? "pending" : undefined;
+      },
+    },
+
+    // ================= Auth & Verification =================
     isEmailVerified: {
       type: Boolean,
       default: false,
     },
+
     emailVerificationToken: String,
     emailVerificationExpires: Date,
+
     passwordResetToken: String,
     passwordResetExpires: Date,
 
-
-    // Security
+    // ================= Security =================
     isBlocked: {
       type: Boolean,
       default: false,
     },
+
     lockUntil: Date,
     lastLogin: Date,
+
     blacklistedTokens: [
       {
         token: String,
         expiresAt: Date,
       },
     ],
-    addresses: [
 
+    // ================= Addresses =================
+    addresses: [
       {
         street: String,
         city: String,
@@ -77,7 +92,6 @@ const userSchema = new mongoose.Schema(
           type: Boolean,
           default: false,
         },
-
       },
     ],
   },
@@ -86,18 +100,22 @@ const userSchema = new mongoose.Schema(
   }
 );
 
-
+// ================= Indexes =================
 userSchema.index({ email: 1 });
 userSchema.index({ phone: 1 });
 userSchema.index({ role: 1 });
+userSchema.index({ vendorStatus: 1 });
 
+// ================= Hooks =================
 userSchema.pre("save", async function (next) {
   if (!this.isModified("password")) return next();
+
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
   next();
 });
 
+// ================= Methods =================
 userSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
@@ -123,11 +141,9 @@ userSchema.methods.createPasswordResetToken = function () {
     .update(resetToken)
     .digest("hex");
 
-  this.passwordResetExpires = Date.now() + 10 * 60 * 1000; // 10 دقايق
+  this.passwordResetExpires = Date.now() + 10 * 60 * 1000;
 
   return resetToken;
 };
-
-
 
 module.exports = mongoose.model("User", userSchema);
