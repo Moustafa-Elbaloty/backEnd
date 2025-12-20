@@ -1,9 +1,8 @@
 const User = require("../models/userModel");
-const vendorModel = require("../models/vendorModel"); // إضافة مهمة
+const vendorModel = require("../models/vendorModel");
 const jwt = require("jsonwebtoken");
 const sendEmail = require("../utils/sendEmail");
 const crypto = require("crypto");
-
 
 const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "10d" });
@@ -14,16 +13,15 @@ const registerUser = async (req, res) => {
     const { name, email, password, phone } = req.body;
 
     if (!name || !email || !password || !phone) {
-      return res.status(400).json({ message: "الرجاء ملأ باقى الحقول" });
+      return res.status(400).json({ message: "Please fill in all required fields" });
     }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
-      return res.status(400).json({ message: "بريدك مسجل مسبقا" });
+      return res.status(400).json({ message: "Email is already registered" });
     }
 
     const user = await User.create({ name, email, password, phone });
-
 
     const verificationToken = user.createEmailVerificationToken();
     await user.save({ validateBeforeSave: false });
@@ -34,46 +32,42 @@ const registerUser = async (req, res) => {
 
     await sendEmail({
       to: user.email,
-      subject: "تفعيل حسابك",
-      text: `من فضلك فعّل حسابك عبر الرابط التالي: ${verificationURL}`,
-      html: `<p>من فضلك فعّل حسابك عبر الضغط على الرابط التالي:</p>
-             <a href="${verificationURL}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">هنا</a>`,
+      subject: "Verify your account",
+      text: `Please verify your account using the following link: ${verificationURL}`,
+      html: `<p>Please verify your account by clicking the link below:</p>
+             <a href="${verificationURL}" style="display:inline-block;padding:10px 20px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;">Verify Account</a>`,
     });
 
     res.status(201).json({
-      message: "تم إنشاء الحساب، من فضلك افحص بريدك لتفعيل الحساب",
+      message: "Account created successfully. Please check your email to verify your account",
     });
   } catch (error) {
     res.status(500).json({
-      message: "حدث خطأ الرجاء اعاده المحاوله",
+      message: "Something went wrong. Please try again",
       error: error.message,
     });
   }
 };
 
-
-
-// login
+// Login
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email }).select("+password");
     if (!user) {
-      return res
-        .status(400)
-        .json({ message: "الرجاء التسجيل اولا " });
+      return res.status(400).json({ message: "Please register first" });
     }
 
     if (!user.isEmailVerified) {
       return res.status(400).json({
-        message: "يرجى تفعيل حسابك عبر البريد الإلكتروني قبل تسجيل الدخول",
+        message: "Please verify your email before logging in",
       });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(400).json({ message: "يوجد بيانات خطأ " });
+      return res.status(400).json({ message: "Invalid email or password" });
     }
 
     res.json({
@@ -84,16 +78,17 @@ const loginUser = async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
-        avatar: user.avatar || "user.png"
-      }
+        avatar: user.avatar || "user.png",
+      },
     });
   } catch (error) {
     res.status(500).json({
-      message: "حدث خطأ الرجاء اعاده المحاوله",
+      message: "Something went wrong. Please try again",
       error: error.message,
     });
   }
 };
+
 const verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
@@ -111,7 +106,7 @@ const verifyEmail = async (req, res) => {
     if (!user) {
       return res
         .status(400)
-        .json({ message: "رابط التفعيل غير صالح أو منتهي الصلاحية" });
+        .json({ message: "Verification link is invalid or has expired" });
     }
 
     user.isEmailVerified = true;
@@ -119,10 +114,10 @@ const verifyEmail = async (req, res) => {
     user.emailVerificationExpires = undefined;
     await user.save();
 
-    res.json({ message: "تم تفعيل الإيميل بنجاح، يمكنك تسجيل الدخول الآن" });
+    res.json({ message: "Email verified successfully. You can now log in" });
   } catch (error) {
     res.status(500).json({
-      message: "حدث خطأ أثناء تفعيل الإيميل",
+      message: "Error occurred while verifying email",
       error: error.message,
     });
   }
@@ -134,7 +129,7 @@ const forgotPassword = async (req, res) => {
     if (!email) {
       return res.status(400).json({
         success: false,
-        message: "من فضلك أدخل البريد الإلكتروني",
+        message: "Please enter your email address",
       });
     }
 
@@ -143,33 +138,32 @@ const forgotPassword = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "لا يوجد حساب بهذا البريد الإلكتروني",
+        message: "No account found with this email",
       });
     }
 
     const resetToken = user.createPasswordResetToken();
     await user.save({ validateBeforeSave: false });
 
-
     const resetURL = `${process.env.FRONT_URL}/reset-password/${resetToken}`;
 
     try {
       await sendEmail({
         to: user.email,
-        subject: "استعادة كلمة المرور",
-        text: `تلقينا طلباً لإعادة تعيين كلمة المرور. من فضلك اضغط على الرابط التالي: ${resetURL}`,
+        subject: "Password Reset",
+        text: `You requested a password reset. Click the following link: ${resetURL}`,
         html: `
-          <h2>مرحباً ${user.name}</h2>
-          <p>من فضلك اضغط على الرابط التالي لإعادة تعيين كلمة المرور:</p>
-          <a href="${resetURL}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">
-            إعادة تعيين كلمة المرور
+          <h2>Hello ${user.name}</h2>
+          <p>Click the link below to reset your password:</p>
+          <a href="${resetURL}" style="display:inline-block;padding:10px 20px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;">
+            Reset Password
           </a>
         `,
       });
 
       res.json({
         success: true,
-        message: "تم إرسال رابط استعادة كلمة المرور إلى بريدك الإلكتروني",
+        message: "Password reset link has been sent to your email",
       });
     } catch (error) {
       user.passwordResetToken = undefined;
@@ -178,33 +172,35 @@ const forgotPassword = async (req, res) => {
 
       return res.status(500).json({
         success: false,
-        message: "حدث خطأ أثناء إرسال الإيميل",
+        message: "Error sending email",
         error: error.message,
       });
     }
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "حدث خطأ أثناء معالجة الطلب",
+      message: "Error processing request",
       error: error.message,
     });
   }
 };
+
 const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
     const { password } = req.body;
+
     if (!password) {
       return res.status(400).json({
         success: false,
-        message: "من فضلك أدخل كلمة المرور الجديدة",
+        message: "Please enter a new password",
       });
     }
 
     if (password.length < 8) {
       return res.status(400).json({
         success: false,
-        message: "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
+        message: "Password must be at least 8 characters long",
       });
     }
 
@@ -221,7 +217,7 @@ const resetPassword = async (req, res) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: "رابط استعادة كلمة المرور غير صالح أو منتهي الصلاحية",
+        message: "Reset link is invalid or has expired",
       });
     }
 
@@ -232,12 +228,12 @@ const resetPassword = async (req, res) => {
 
     res.json({
       success: true,
-      message: "تم تغيير كلمة المرور بنجاح! يمكنك الآن تسجيل الدخول",
+      message: "Password has been reset successfully",
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "حدث خطأ أثناء تغيير كلمة المرور",
+      message: "Error resetting password",
       error: error.message,
     });
   }
@@ -250,23 +246,21 @@ const changePassword = async (req, res) => {
     if (!currentPassword || !newPassword || !confirmNewPassword) {
       return res.status(400).json({
         success: false,
-        message: "م جميع الحقول المطلوبة",
+        message: "All fields are required",
       });
     }
-
 
     if (newPassword !== confirmNewPassword) {
       return res.status(400).json({
         success: false,
-        message: "كلمة المرور  غير متطابقة",
+        message: "Passwords do not match",
       });
     }
-
 
     if (newPassword.length < 8) {
       return res.status(400).json({
         success: false,
-        message: "كلمة المرور يجب أن تكون 8 أحرف على الأقل",
+        message: "Password must be at least 8 characters long",
       });
     }
 
@@ -275,7 +269,7 @@ const changePassword = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "المستخدم غير موجود",
+        message: "User not found",
       });
     }
 
@@ -283,25 +277,24 @@ const changePassword = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: "كلمة المرور القديمة غير صحيحة",
+        message: "Current password is incorrect",
       });
     }
 
     user.password = newPassword;
     await user.save();
 
-
     const token = generateToken(user._id, user.role);
 
     res.json({
       success: true,
-      message: "تم تغيير كلمة المرور بنجاح",
+      message: "Password changed successfully",
       token,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "حدث خطأ أثناء تغيير كلمة المرور",
+      message: "Error changing password",
       error: error.message,
     });
   }
@@ -309,7 +302,6 @@ const changePassword = async (req, res) => {
 
 const logout = async (req, res) => {
   try {
-    // جلب الـ Token من الـ Header
     let token;
     if (
       req.headers.authorization &&
@@ -321,44 +313,40 @@ const logout = async (req, res) => {
     if (!token) {
       return res.status(400).json({
         success: false,
-        message: "لا يوجد توكن لتسجيل الخروج",
+        message: "No token provided",
       });
     }
 
-    // فك تشفير الـ Token لمعرفة وقت انتهائه
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // جلب User
     const user = await User.findById(req.user._id);
 
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "المستخدم غير موجود",
+        message: "User not found",
       });
     }
 
-    // إضافة الـ Token للـ Blacklist
     user.blacklistedTokens.push({
-      token: token,
-      expiresAt: new Date(decoded.exp * 1000), // تحويل من Unix timestamp
+      token,
+      expiresAt: new Date(decoded.exp * 1000),
     });
 
     await user.save({ validateBeforeSave: false });
 
     res.json({
       success: true,
-      message: "تم تسجيل الخروج بنجاح",
+      message: "Logged out successfully",
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "حدث خطأ أثناء تسجيل الخروج",
+      message: "Error logging out",
       error: error.message,
     });
   }
 };
-
 
 // Admin verifies vendor
 const verifyVendor = async (req, res) => {
@@ -397,5 +385,13 @@ const verifyVendor = async (req, res) => {
   }
 };
 
-
-module.exports = { registerUser, loginUser, verifyVendor, verifyEmail, forgotPassword, resetPassword, changePassword, logout };
+module.exports = {
+  registerUser,
+  loginUser,
+  verifyVendor,
+  verifyEmail,
+  forgotPassword,
+  resetPassword,
+  changePassword,
+  logout,
+};

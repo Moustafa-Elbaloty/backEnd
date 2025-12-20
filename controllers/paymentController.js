@@ -1,22 +1,20 @@
 const Stripe = require("stripe");
 const dotenv = require("dotenv");
-
-dotenv.config(); // تحميل متغيرات البيئة بدري داخل الملف نفسه كضمان إضافي
+dotenv.config();
 
 let stripe;
 if (process.env.STRIPE_SECRET_KEY) {
   stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-  console.log("✅ Stripe Initialized Successfully");
-} else {
-  console.error("❌ STRIPE_SECRET_KEY is missing. Check your .env file");
 }
 
 const Payment = require("../models/paymentModel");
 const Order = require("../models/orderModel");
+const User = require("../models/userModel");
+const Product = require("../models/productModel");
 
-// ============================
-//    GET USER PAYMENTS
-// ============================
+/* ======================================================
+   🟢 USER PAYMENTS
+====================================================== */
 exports.getMyPayments = async (req, res) => {
   try {
     const payments = await Payment.find({ user: req.user.id })
@@ -33,9 +31,9 @@ exports.getMyPayments = async (req, res) => {
   }
 };
 
-// ============================
-//    GET PAYMENT BY ID
-// ============================
+/* ======================================================
+   🟢 GET PAYMENT BY ID
+====================================================== */
 exports.getPaymentById = async (req, res) => {
   try {
     const payment = await Payment.findOne({
@@ -56,16 +54,12 @@ exports.getPaymentById = async (req, res) => {
   }
 };
 
-// ============================
-//    CONFIRM STRIPE PAYMENT (Webhook أو Manual)
-// ============================
+/* ======================================================
+   🟢 STRIPE CONFIRM
+====================================================== */
 exports.confirmStripePayment = async (req, res) => {
   try {
     const { paymentIntentId } = req.body;
-
-    if (!paymentIntentId) {
-      return res.status(400).json({ message: "Payment Intent ID is required" });
-    }
 
     const payment = await Payment.findOne({
       transactionId: paymentIntentId,
@@ -87,40 +81,24 @@ exports.confirmStripePayment = async (req, res) => {
         payment.order.orderStatus = "processing";
         await payment.order.save();
       }
-
-      res.json({
-        message: "Payment confirmed successfully",
-        payment,
-        order: payment.order,
-      });
-    } else {
-      res.json({
-        message: "Payment is still pending",
-        paymentStatus: paymentIntent.status,
-        payment,
-      });
     }
+
+    res.json({
+      success: true,
+      payment,
+      order: payment.order,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// ============================
-//    Stripe Init Payment (Visa/Master)
-// ============================
+/* ======================================================
+   🟢 STRIPE INIT
+====================================================== */
 exports.stripeInit = async (req, res) => {
   try {
     const { orderId } = req.body;
-
-    if (!orderId) {
-      return res.status(400).json({ message: "Order ID is required" });
-    }
-
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return res.status(500).json({
-        message: "Stripe is not configured. Please check your .env file",
-      });
-    }
 
     const order = await Order.findOne({
       _id: orderId,
@@ -132,47 +110,13 @@ exports.stripeInit = async (req, res) => {
     }
 
     if (order.paymentStatus === "paid") {
-      return res.status(400).json({
-        message: "This order has already been paid",
-      });
-    }
-
-    if (order.paymentMethod !== "stripe") {
-      return res.status(400).json({
-        message: "This order is not set for Stripe payment",
-      });
-    }
-
-    const existingPayment = await Payment.findOne({
-      order: orderId,
-      method: "stripe",
-      status: { $in: ["paid", "pending"] },
-    });
-
-    if (existingPayment && existingPayment.status === "pending" && existingPayment.transactionId) {
-      try {
-        const paymentIntent = await stripe.paymentIntents.retrieve(existingPayment.transactionId);
-        return res.json({
-          message: "Stripe payment already initialized",
-          clientSecret: paymentIntent.client_secret,
-          payment: existingPayment,
-        });
-      } catch (err) { /* continue to create new one */ }
-
-    } else if (existingPayment && existingPayment.status === "paid") {
-      return res.status(400).json({
-        message: "This order has already been paid",
-      });
+      return res.status(400).json({ message: "Order already paid" });
     }
 
     const paymentIntent = await stripe.paymentIntents.create({
       amount: Math.round(order.totalPrice * 100),
       currency: "usd",
       payment_method_types: ["card"],
-      metadata: {
-        orderId: order._id.toString(),
-        userId: req.user.id.toString(),
-      },
     });
 
     const payment = await Payment.create({
@@ -185,26 +129,21 @@ exports.stripeInit = async (req, res) => {
     });
 
     res.json({
-      message: "Stripe payment initialized",
+      success: true,
       clientSecret: paymentIntent.client_secret,
       payment,
     });
-
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// ============================
-//    PayPal Simulation
-// ============================
+/* ======================================================
+   🟢 PAYPAL (SIMULATION)
+====================================================== */
 exports.paypalPay = async (req, res) => {
   try {
     const { orderId } = req.body;
-
-    if (!orderId) {
-      return res.status(400).json({ message: "Order ID is required" });
-    }
 
     const order = await Order.findOne({
       _id: orderId,
@@ -214,14 +153,6 @@ exports.paypalPay = async (req, res) => {
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
-
-    if (order.paymentStatus === "paid") {
-      return res.status(400).json({
-        message: "This order has already been paid",
-      });
-    }
-
-    const transactionId = "PAYPAL-" + Date.now();
 
     const payment = await Payment.create({
       user: req.user.id,
@@ -229,7 +160,7 @@ exports.paypalPay = async (req, res) => {
       method: "paypal",
       amount: order.totalPrice,
       status: "paid",
-      transactionId,
+      transactionId: "PAYPAL-" + Date.now(),
     });
 
     order.paymentStatus = "paid";
@@ -237,26 +168,21 @@ exports.paypalPay = async (req, res) => {
     await order.save();
 
     res.json({
-      message: "PayPal payment successful",
+      success: true,
       payment,
       order,
     });
-
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
-// ============================
-//    Cash On Delivery
-// ============================
+/* ======================================================
+   🟢 CASH PAYMENT
+====================================================== */
 exports.cashPay = async (req, res) => {
   try {
     const { orderId } = req.body;
-
-    if (!orderId) {
-      return res.status(400).json({ message: "Order ID is required" });
-    }
 
     const order = await Order.findOne({
       _id: orderId,
@@ -265,25 +191,6 @@ exports.cashPay = async (req, res) => {
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
-    }
-
-    if (order.paymentMethod !== "cash") {
-      return res.status(400).json({
-        message: "This order is not set for cash payment",
-      });
-    }
-
-    const existingPayment = await Payment.findOne({
-      order: orderId,
-      method: "cash",
-    });
-
-    if (existingPayment) {
-      return res.json({
-        message: "Cash payment already registered",
-        payment: existingPayment,
-        order,
-      });
     }
 
     const payment = await Payment.create({
@@ -299,24 +206,28 @@ exports.cashPay = async (req, res) => {
     await order.save();
 
     res.json({
-      message: "Cash payment selected",
+      success: true,
       payment,
       order,
     });
-
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
+/* ======================================================
+   🟢 ADMIN – GET ALL PAYMENTS
+====================================================== */
 exports.getAllPayments = async (req, res) => {
   try {
-    if (req.user.role !== "admin")
+    if (req.user.role !== "admin") {
       return res.status(403).json({ message: "Access denied" });
+    }
+
     const payments = await Payment.find()
-      .populate({ path: "user", select: "name email role" })
-      .populate({ path: "order", select: "totalPrice paymentStatus orderStatus" })
-      .sort({ createdAt: -1 })
-      .lean();
+      .populate("user", "name email role")
+      .populate("order", "totalPrice paymentStatus orderStatus")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -324,68 +235,38 @@ exports.getAllPayments = async (req, res) => {
       payments,
     });
   } catch (err) {
-    console.error("Error fetching payments:", err.message);
-    res.status(500).json({
-      success: false,
-      message: "Error fetching payments",
-      error: err.message,
-    });
+    res.status(500).json({ message: err.message });
   }
 };
 
+/* ======================================================
+   🟢 ADMIN – DASHBOARD STATS (FINAL)
+====================================================== */
 exports.getAdminDashboardStats = async (req, res) => {
   try {
     if (req.user.role !== "admin") {
-      return res.status(403).json({ message: "Access denied. Admins only." });
+      return res.status(403).json({ message: "Access denied" });
     }
-    const { vendorId, userId } = req.query;
-    const orderFilter = {};
-    const paymentFilter = {};
 
-    if (vendorId) orderFilter.vendor = vendorId;
-    if (userId) orderFilter.user = userId;
+    const totalUsers = await User.countDocuments({ role: { $ne: "admin" } });
+    const totalProducts = await Product.countDocuments();
 
-    if (userId) paymentFilter.user = userId;
-
-    // إجمالي الطلبات والمبيعات
-    const ordersStats = await Order.aggregate([
-      { $match: orderFilter },
+    const ordersAgg = await Order.aggregate([
       {
         $group: {
           _id: null,
           totalOrders: { $sum: 1 },
           totalRevenue: { $sum: "$totalPrice" },
-          totalAdminCommission: { $sum: "$adminCommission" },
         },
       },
     ]);
 
-    // عدد الطلبات حسب الحالة
-    const ordersByStatus = await Order.aggregate([
-      { $match: orderFilter },
-      { $group: { _id: "$orderStatus", count: { $sum: 1 } } },
-    ]);
-
-    // عدد المدفوعات حسب الحالة
-    const paymentsByStatus = await Payment.aggregate([
-      { $match: paymentFilter },
-      { $group: { _id: "$status", count: { $sum: 1 } } },
-    ]);
-
-    // إجمالي المدفوعات المكتملة
-    const totalPaidPayments = await Payment.aggregate([
-      { $match: { status: "paid", ...paymentFilter } },
-      { $group: { _id: null, totalPaid: { $sum: "$amount" } } },
-    ]);
-
-    res.json({
+    res.status(200).json({
       success: true,
-      totalOrders: ordersStats[0]?.totalOrders || 0,
-      totalRevenue: ordersStats[0]?.totalRevenue || 0,
-      totalAdminCommission: ordersStats[0]?.totalAdminCommission || 0,
-      ordersByStatus,
-      paymentsByStatus,
-      totalPaidPayments: totalPaidPayments[0]?.totalPaid || 0,
+      totalUsers,
+      totalProducts,
+      totalOrders: ordersAgg[0]?.totalOrders || 0,
+      totalRevenue: ordersAgg[0]?.totalRevenue || 0,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });

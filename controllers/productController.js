@@ -274,9 +274,8 @@ const getProducts = async (req, res) => {
       };
     }
     // Full-text search (on name, description, etc.) //
-    if (req.query.q) {
-      filter.name = { $regex: req.query.q, $options: 'i' };
-    }
+    if (req.query.q) filter.$text = { $search: req.query.q };
+
     // --sorting --//
 
     const sortField = req.query.sort || "createdAt";
