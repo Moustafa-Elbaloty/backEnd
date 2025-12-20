@@ -53,20 +53,27 @@ const registerVendor = async (req, res) => {
   try {
     const { name, email, password, phone, storeName } = req.body;
 
+    // ================= Validation =================
     if (!name || !email || !password || !phone || !storeName) {
-      return res.status(400).json({ message: "الرجاء ملء جميع البيانات" });
+      return res.status(400).json({
+        message: "Please fill in all required fields",
+      });
     }
 
     if (!req.files || (!req.files.idCard && !req.files.commercialRegister)) {
-      return res.status(400).json({ message: "مستندات التاجر مطلوبة" });
+      return res.status(400).json({
+        message: "Vendor documents are required",
+      });
     }
 
     const userExists = await User.findOne({ email });
     if (userExists) {
-      return res.status(400).json({ message: "البريد مسجل مسبقًا" });
+      return res.status(400).json({
+        message: "Email is already registered",
+      });
     }
 
-    // 1️⃣ إنشاء المستخدم بدور vendor
+    // ================= Create User =================
     const user = await User.create({
       name,
       email,
@@ -75,7 +82,27 @@ const registerVendor = async (req, res) => {
       role: "vendor",
     });
 
-    // 2️⃣ تجهيز documents array
+    // ================= Email Verification =================
+    const verificationToken = user.createEmailVerificationToken();
+    await user.save({ validateBeforeSave: false });
+
+    const verificationURL = `${req.protocol}://${req.get(
+      "host"
+    )}/api/auth/verify-email/${verificationToken}`;
+
+    await sendEmail({
+      to: user.email,
+      subject: "Verify your vendor account",
+      text: `Please verify your vendor account using the following link: ${verificationURL}`,
+      html: `
+        <p>Please verify your vendor account by clicking the link below:</p>
+        <a href="${verificationURL}" style="display:inline-block;padding:10px 20px;background-color:#007bff;color:white;text-decoration:none;border-radius:5px;">
+          Verify Vendor Account
+        </a>
+      `,
+    });
+
+    // ================= Prepare Documents =================
     const documents = [];
 
     if (req.files.idCard) {
@@ -100,7 +127,7 @@ const registerVendor = async (req, res) => {
       });
     }
 
-    // 3️⃣ إنشاء vendor profile
+    // ================= Create Vendor =================
     const vendor = await vendorModel.create({
       user: user._id,
       storeName,
@@ -108,19 +135,22 @@ const registerVendor = async (req, res) => {
       isVerified: false,
     });
 
+    // ================= Response =================
     res.status(201).json({
-      message: "تم تسجيل التاجر بنجاح، في انتظار موافقة الإدارة",
+      message:
+        "Vendor registered successfully. Please verify your email, then wait for admin approval.",
       vendorId: vendor._id,
     });
 
   } catch (error) {
     console.error("Vendor Register Error:", error);
     res.status(500).json({
-      message: "خطأ أثناء تسجيل التاجر",
+      message: "Error occurred while registering vendor",
       error: error.message,
     });
   }
 };
+
 
 
 // ================= Login =================
