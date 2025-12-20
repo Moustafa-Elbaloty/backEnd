@@ -8,6 +8,7 @@ const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "10d" });
 };
 
+// ================= Register =================
 const registerUser = async (req, res) => {
   try {
     const { name, email, password, phone } = req.body;
@@ -49,7 +50,7 @@ const registerUser = async (req, res) => {
   }
 };
 
-// Login
+// ================= Login =================
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -68,6 +69,14 @@ const loginUser = async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
+    }
+
+    // 🔴🔴🔴 الحل هنا (مهم جدًا)
+    if (user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: "🚫 This account has been blocked. Please contact support for assistance.",
+      });
     }
 
     res.json({
@@ -89,6 +98,7 @@ const loginUser = async (req, res) => {
   }
 };
 
+// ================= Verify Email =================
 const verifyEmail = async (req, res) => {
   try {
     const { token } = req.params;
@@ -123,6 +133,7 @@ const verifyEmail = async (req, res) => {
   }
 };
 
+// ================= Forgot Password =================
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -185,6 +196,7 @@ const forgotPassword = async (req, res) => {
   }
 };
 
+// ================= Reset Password =================
 const resetPassword = async (req, res) => {
   try {
     const { token } = req.params;
@@ -239,6 +251,7 @@ const resetPassword = async (req, res) => {
   }
 };
 
+// ================= Change Password =================
 const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword, confirmNewPassword } = req.body;
@@ -300,6 +313,7 @@ const changePassword = async (req, res) => {
   }
 };
 
+// ================= Logout =================
 const logout = async (req, res) => {
   try {
     let token;
@@ -348,7 +362,7 @@ const logout = async (req, res) => {
   }
 };
 
-// Admin verifies vendor
+// ================= Verify Vendor =================
 const verifyVendor = async (req, res) => {
   try {
     const { vendorId } = req.params;
