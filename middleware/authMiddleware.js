@@ -3,7 +3,7 @@ const User = require("../models/userModel");
 
 const protect = async (req, res, next) => {
   try {
-    // 1️⃣ تأكد من وجود Authorization header
+    // 1️⃣ التأكد من وجود Authorization header
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -29,7 +29,15 @@ const protect = async (req, res, next) => {
       });
     }
 
-    // 5️⃣ التحقق من Blacklist
+    // 🔴 5️⃣ التحقق هل الحساب محظور (BLOCKED)
+    if (user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: "🚫 تم حظر حسابك، من فضلك تواصل مع الدعم",
+      });
+    }
+
+    // 6️⃣ التحقق من Blacklist
     const isBlacklisted = user.blacklistedTokens?.some(
       (item) => item.token === token
     );
@@ -41,7 +49,7 @@ const protect = async (req, res, next) => {
       });
     }
 
-    // 6️⃣ إرفاق المستخدم بالـ request
+    // 7️⃣ إرفاق المستخدم بالـ request
     req.user = user;
 
     next();
